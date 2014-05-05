@@ -186,10 +186,14 @@ See `Fsproj-menu-templates' for the list of supported templates."
 ;; Commands
 ;;------------------------------------------------------------------------------
 
-(defun Fsproj-menu-move ()
+(defun Fsproj-menu-move (toIndex)
   "Move the current line's file to another position within the project."
-  (interactive)
-  )
+  (interactive "nMove file to: ")
+  ;; TODO: check file is included in the project
+  (let* ((file (tabulated-list-get-id))
+         (entry (tabulated-list-get-entry))
+         (fromIndex (string-to-number (aref entry 2))))
+    (message "MOVE from %d to %d" fromIndex toIndex)))
 
 ;;------------------------------------------------------------------------------
 
