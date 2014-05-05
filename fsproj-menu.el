@@ -35,7 +35,7 @@
 (defgroup Fsproj-menu nil
   "Show a menu of all of the files in a Visual Studio F# project."
   :group 'tools
-  :group 'convenience)
+  :group 'fsharp)
 
 (defcustom Fsproj-menu-use-header-line t
   "If non-nil, use the header line to display Fsproj Menu column titles."
@@ -83,17 +83,21 @@
 (defvar Info-current-file) ; from info.el
 (defvar Info-current-node) ; from info.el
 
-;; TODO: key binding map
+
 (defvar Fsproj-menu-mode-map
   (let ((map (make-sparse-keymap))
         (menu-map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
     ;; TODO: define keys
+    (define-key map "m" 'Fsproj-menu-move)
     ;; TODO: define bindings
     (bindings--define-key menu-map [quit]
       '(menu-item "Quit" quit-window
                   :help "Remove the Fsproj Menu from the display"))
-    map)
+    (bindings--define-key menu-map [mv]
+      '(menu-item "Move" Fsproj-menu-move
+                  :help "Move the file on this line to another
+    position in the project file")) map)
   "Local keymap for `Fsproj-menu-mode' buffers.")
 
 (define-derived-mode Fsproj-menu-mode tabulated-list-mode "Fsproj Menu"
@@ -105,22 +109,32 @@ of its contents.
 In Fsproj Menu mode, the following commands are defined:
 \\<Fsproj-menu-mode-map>
 \\[quit-window]    Remove the Fsproj Menu from the display.
-TODO: add other commands")
+\\[Fsproj-menu-move]    Move the current line's file."
+  (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
 
 
 (defun fsproj-menu (&optional arg)
   "Switch to the Fsproj Menu.
+
 By default, the Fsproj Menu lists all files in the same directory
 as the project file. With prefix argument ARG, show only files
 that are already in the project.
 
-In the Fsproj Menu, the first column (denoted \"C\") shows \".\"
-for the file from which you came, \">\" for files you mark to
-be displayed, and \"R\" for those you mark for removal.
-TODO: define other characters
+In the Fsproj Menu, the first column (denoted \"S\") shows the status
+of the file where: \"+\" indicates a file in the project directory
+that is included in the project, \"-\" indicates a file in the project
+directory that is not included in the project and \"!\" indicates a file
+that is included in the project but is not on disk.
 
-The remaining columns show the file name, the buffer size in
-characters, its major mode, and the absolute file name.
+The second column (denoted \"T\") shows the type of inclusion in the project
+where: \"C\" indicates a compiled file, \"N\" indicates a non-compiled file
+and \".\" indicates a file not included in the project.
+
+The third column (denoted \"No.\") shows the position of a file included in the
+project.
+
+The remaining columns show the file name and the buffer size in
+characters.
 
 See `Fsproj-menu-mode' for the keybindings available the Fsproj
 Menu."
@@ -128,9 +142,9 @@ Menu."
   (unless (fsharp-mode/find-fsproj (buffer-file-name))
     (call-interactively 'create-fsproj-file))
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (buffer-file-name)))
-    (switch-to-buffer (list-files-noselect (fsharp-mode/find-fsproj (buffer-file-name)) arg))
-    ;; TODO: edit list of available commands
-    (message "Commands: d, s, x, u; f, o, 1, 2, m, v; ~, %%; q to quit; ? for help.")))
+    (switch-to-buffer
+     (list-files-noselect (fsharp-mode/find-fsproj (buffer-file-name)) arg))
+    (message "Commands: m, q to quit; ? for help.")))
 
 
 (defun fsproj-menu-other-window (&optional arg)
@@ -144,9 +158,9 @@ ARG, show only files that are in the project file."
   (unless (fsharp-mode/find-fsproj (buffer-file-name))
     (call-interactively 'create-fsproj-file))
   (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (buffer-file-name)))
-    (switch-to-buffer-other-window (list-files-noselect (fsharp-mode/find-fsproj (buffer-file-name)) arg)))
-  ;; TODO: edit list of available commands
-  (message "Commands: d, s, x, u; f, o, 1, 2, m, v; ~, %%; q to quit; ? for help."))
+    (switch-to-buffer-other-window
+     (list-files-noselect (fsharp-mode/find-fsproj (buffer-file-name)) arg)))
+  (message "Commands: m, q to quit; ? for help."))
 
 
 (defun create-fsproj-file (file-name template)
@@ -164,8 +178,14 @@ See `Fsproj-menu-templates' for the list of supported templates."
     (funcall (cdr (assoc template Fsproj-menu-templates)))
     file-name))
 
+;;------------------------------------------------------------------------------
+;; Commands
+;;------------------------------------------------------------------------------
 
-;; TODO: command functions
+
+
+
+;;------------------------------------------------------------------------------
 
 ;;;###autoload
 (defun list-files-noselect (proj-file &optional proj-only)
@@ -220,7 +240,8 @@ otherwise show all files in the project file directory."
       (let ((project-file-list (project-file-entries Fsproj-menu-proj-doc)))
         (setq tabulated-list-entries project-file-list))
     (let* ((project-file-list (project-file-entries Fsproj-menu-proj-doc))
-           (non-project-file-list (non-project-file-entries proj-file project-file-list)))
+           (non-project-file-list
+            (non-project-file-entries proj-file project-file-list)))
       (setq tabulated-list-entries (append non-project-file-list project-file-list))))
   (tabulated-list-init-header))
 
@@ -257,11 +278,19 @@ otherwise show all files in the project file directory."
           (cond ((eq name 'Compile)
                  (setq counter (incf counter))
                  (let ((file-name (include-attr-value item)))
-                   (push (file-entry file-name (if (file-exists-p file-name) "+" "!") "C" (number-to-string counter)) entries)))
+                   (push (file-entry
+                          file-name
+                          (if (file-exists-p file-name) "+" "!")
+                          "C"
+                          (number-to-string counter)) entries)))
                 ((eq name 'None)
                  (setq counter (incf counter))
                  (let ((file-name (include-attr-value item)))
-                   (push (file-entry file-name (if (file-exists-p file-name) "+" "!") "N" (number-to-string counter)) entries)))
+                   (push (file-entry
+                          file-name
+                          (if (file-exists-p file-name) "+" "!")
+                          "N"
+                          (number-to-string counter)) entries)))
                 ))))
     (nreverse entries)))
 
@@ -273,13 +302,15 @@ otherwise show all files in the project file directory."
 
 (defun non-project-file-entries (proj-file project-file-entries)
   "Returns the list of non-project files in the project directory."
-  (let* ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
-         (non-project-file-list (my-filter (lambda (file)
-                                             (and
-                                              (not (file-directory-p file))
-                                              (not (assq file project-file-entries))
-                                              (not (string= "fsproj" (file-name-extension file))))                       
-                                             ) dir-file-list))
+  (let* ((dir-file-list
+          (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
+         (non-project-file-list
+          (my-filter (lambda (file)
+                       (and
+                        (not (file-directory-p file))
+                        (not (assq file project-file-entries))
+                        (not (string= "fsproj" (file-name-extension file)))))
+                     dir-file-list))
          entries)
     (dolist (file non-project-file-list)
       (push (file-entry (file-name-nondirectory file) "-" "." ".") entries))
