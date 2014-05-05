@@ -112,6 +112,10 @@ In Fsproj Menu mode, the following commands are defined:
 \\[Fsproj-menu-move]    Move the current line's file."
   (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
 
+;; TODO: get directory name if in dired buffer
+(defun fsproj-start ()
+  (or buffer-file-name dired-directory))
+
 
 (defun fsproj-menu (&optional arg)
   "Switch to the Fsproj Menu.
@@ -139,11 +143,11 @@ characters.
 See `Fsproj-menu-mode' for the keybindings available the Fsproj
 Menu."
   (interactive "P")
-  (unless (fsharp-mode/find-fsproj (buffer-file-name))
+  (unless (fsharp-mode/find-fsproj (fsproj-start))
     (call-interactively 'create-fsproj-file))
-  (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (buffer-file-name)))
+  (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
-     (list-files-noselect (fsharp-mode/find-fsproj (buffer-file-name)) arg))
+     (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
     (message "Commands: m, q to quit; ? for help.")))
 
 
@@ -155,11 +159,11 @@ By default, all files are listed in the same directory as the project file.
 With prefix argument
 ARG, show only files that are in the project file."
   (interactive "P")
-  (unless (fsharp-mode/find-fsproj (buffer-file-name))
+  (unless (fsharp-mode/find-fsproj (fsproj-start))
     (call-interactively 'create-fsproj-file))
-  (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (buffer-file-name)))
+  (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer-other-window
-     (list-files-noselect (fsharp-mode/find-fsproj (buffer-file-name)) arg)))
+     (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg)))
   (message "Commands: m, q to quit; ? for help."))
 
 
@@ -182,8 +186,10 @@ See `Fsproj-menu-templates' for the list of supported templates."
 ;; Commands
 ;;------------------------------------------------------------------------------
 
-
-
+(defun Fsproj-menu-move ()
+  "Move the current line's file to another position within the project."
+  (interactive)
+  )
 
 ;;------------------------------------------------------------------------------
 
@@ -296,8 +302,8 @@ otherwise show all files in the project file directory."
 
 
 (defun my-filter (condp lst)
-    (delq nil
-          (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
+  (delq nil
+        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
 
 
 (defun non-project-file-entries (proj-file project-file-entries)
@@ -309,8 +315,8 @@ otherwise show all files in the project file directory."
                        (and
                         (not (file-directory-p file))
                         (not (assq file project-file-entries))
-                        (not (string= "fsproj" (file-name-extension file)))))
-                     dir-file-list))
+                        (not (string= "fsproj" (file-name-extension file)))
+                        )) dir-file-list))
          entries)
     (dolist (file non-project-file-list)
       (push (file-entry (file-name-nondirectory file) "-" "." ".") entries))
