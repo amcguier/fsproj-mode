@@ -88,7 +88,6 @@
   (let ((map (make-sparse-keymap))
         (menu-map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    ;; TODO: define keys
     (define-key map "m" 'Fsproj-menu-move)
     ;; TODO: define bindings
     (bindings--define-key menu-map [quit]
@@ -112,7 +111,7 @@ In Fsproj Menu mode, the following commands are defined:
 \\[Fsproj-menu-move]    Move the current line's file."
   (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
 
-;; TODO: get directory name if in dired buffer
+
 (defun fsproj-start ()
   (or buffer-file-name dired-directory))
 
@@ -190,10 +189,11 @@ See `Fsproj-menu-templates' for the list of supported templates."
   "Move the current line's file to another position within the project."
   (interactive "nMove file to: ")
   ;; TODO: check file is included in the project
-  (let* ((file (tabulated-list-get-id))
+  (let* ((file-name (tabulated-list-get-id))
          (entry (tabulated-list-get-entry))
-         (fromIndex (string-to-number (aref entry 2))))
-    (message "MOVE from %d to %d" fromIndex toIndex)))
+         (fromIndex (string-to-number (aref entry 2)))
+         (file-status (aref entry 0)))
+    (message "MOVE %s%s from %d to %d" file-status file-name fromIndex toIndex)))
 
 ;;------------------------------------------------------------------------------
 
