@@ -544,6 +544,66 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 ;;------------------------------------------------------------------------------
+;; DOM to string
+;;------------------------------------------------------------------------------
+
+
+(defun dom-to-string-doc (doc)
+  "Convert a DOM document to an XML string."
+  (let ((result "<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+        (root (dom-document-element doc)))
+    (setq result (concat result (dom-to-string-node root)))))
+
+
+(defun dom-to-string-node (node)
+  "Convert a DOM node to an XML string."
+  (let ((node-name (symbol-name (dom-node-name node)))
+        (child-nodes (dom-node-child-nodes node)))
+    (if (dom-text-p node)
+        (dom-node-value node)
+      (concat "<" node-name ">" (dom-to-string-node-list child-nodes) "</" node-name ">"))))
+
+
+(defun dom-to-string-node-list (nodes)
+  "Convert a DOM node list to an XML string."
+  (let ((result))
+    (dolist (node nodes result)
+      (setq result (concat result (dom-to-string-node node))))))
+
+
+(let* ((doc (dom-make-document-from-xml
+            (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+       (root (dom-document-element doc))
+       (name (dom-node-name root)))
+  (dom-to-string-doc doc)
+  )
+
+
+(defun dom-to-string-child-nodes (child-nodes)
+  "Convert a DOM child node list to an XML string."
+  (let (value)
+    (dolist (node child-nodes value)
+      (setq value (concat value (dom-to-string-child-node))))))
+
+
+(defun dom-to-string-child-node (child-node)
+  "Convert a DOM child-node to an XML string."
+  (if (stringp child-node)
+      child-node
+    (dom-to-string-node child-node)))
+
+
+(defun dom-to-string-node-name (node)
+  "Convert a DOM node to its name string."
+  (dom-node-name node))
+
+
+(defun dom-to-string-attributes (attributes)
+  "Convert an attribute list to an XML attributes string."
+  (message "TODO attributes"))
+
+
+;;------------------------------------------------------------------------------
 ;; Project - stolen from fsharp-mode
 ;;------------------------------------------------------------------------------
 
