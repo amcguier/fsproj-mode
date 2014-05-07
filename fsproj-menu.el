@@ -555,52 +555,38 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
     (setq result (concat result (dom-to-string-node root)))))
 
 
-(defun dom-to-string-node (node)
-  "Convert a DOM node to an XML string."
-  (let ((node-name (symbol-name (dom-node-name node)))
-        (child-nodes (dom-node-child-nodes node)))
-    (if (dom-text-p node)
-        (dom-node-value node)
-      (concat "<" node-name ">" (dom-to-string-node-list child-nodes) "</" node-name ">"))))
-
-
-(defun dom-to-string-node-list (nodes)
+(defun dom-to-string-nodes (nodes)
   "Convert a DOM node list to an XML string."
   (let ((result))
     (dolist (node nodes result)
       (setq result (concat result (dom-to-string-node node))))))
 
 
-(let* ((doc (dom-make-document-from-xml
-            (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-       (root (dom-document-element doc))
-       (name (dom-node-name root)))
-  (dom-to-string-doc doc)
-  )
+(defun dom-to-string-node (node)
+  "Convert a DOM node to an XML string."
+  (let ((node-name (symbol-name (dom-node-name node)))
+        (child-nodes (dom-node-child-nodes node)))
+    (if (dom-text-p node)
+        (dom-node-value node)
+      (concat
+       "<" node-name (dom-to-string-attributes node) ">"
+       (dom-to-string-nodes child-nodes)
+       "</" node-name ">"))))
 
 
-(defun dom-to-string-child-nodes (child-nodes)
-  "Convert a DOM child node list to an XML string."
-  (let (value)
-    (dolist (node child-nodes value)
-      (setq value (concat value (dom-to-string-child-node))))))
-
-
-(defun dom-to-string-child-node (child-node)
-  "Convert a DOM child-node to an XML string."
-  (if (stringp child-node)
-      child-node
-    (dom-to-string-node child-node)))
-
-
-(defun dom-to-string-node-name (node)
-  "Convert a DOM node to its name string."
-  (dom-node-name node))
-
-
-(defun dom-to-string-attributes (attributes)
+(defun dom-to-string-attributes (node)
   "Convert an attribute list to an XML attributes string."
-  (message "TODO attributes"))
+  (let ((result)
+        (attributes (dom-node-attributes node)))
+    (dolist (attribute attributes result)
+      (setq result (concat result (dom-to-string-attribute attribute))))))
+
+
+(defun dom-to-string-attribute (attribute)
+  "Convert an attribute to an XML attribute string."
+  (let ((name (symbol-name (dom-node-name attribute)))
+        (value (dom-node-value attribute)))
+    (concat " " name "=\"" value "\"")))
 
 
 ;;------------------------------------------------------------------------------
@@ -636,14 +622,37 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 ;;------------------------------------------------------------------------------
 
 
-;; (eval-when-compile
-;;   (when (file-readable-p "sample.fsproj")
-;;     (let* ((data (car (xml-parse-file "sample.fsproj")))
-;;            (doc (dom-make-document-from-xml data)))
-;;       ;; Test getting files included in project.
-;;       (let ((entries (project-file-entries doc)))
-;;         (assert (eq 4 (length entries)))
-;;         ))))
+;; Test: dom-to-string
+(eval-when-compile
+  (when (file-readable-p "TestProject/TestProject.fsproj")
+    (let* ((doc1 (dom-make-document-from-xml
+                  (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+           (root1 (dom-document-element doc1)))
+      (let* ((xml (dom-to-string-doc doc1))
+             (doc2 (with-temp-buffer
+                     (insert xml)
+                     (dom-make-document-from-xml
+                      (car (xml-parse-region (point-min) (point-max))))))
+             (root2 (dom-document-element doc2)))
+        (assert (not (eq root1 root2)))
+        (assert (not (eq
+                      (dom-node-attributes root1)
+                      (dom-node-attributes root2))))
+        (assert (eq
+                 (dom-node-name (car (dom-node-attributes root1)))
+                 (dom-node-name (car (dom-node-attributes root2)))))
+        (assert (not (eq
+                      (dom-node-value (car (dom-node-attributes root1)))
+                      (dom-node-value (car (dom-node-attributes root2))))))
+        (assert (equal
+                 (dom-node-value (car (dom-node-attributes root1)))
+                 (dom-node-value (car (dom-node-attributes root2)))))
+        (assert (equal
+                 (dom-node-name (dom-node-last-child root1))
+                 (dom-node-name (dom-node-last-child root2))))
+        (assert (equal
+                 (dom-node-value (dom-node-last-child root1))
+                 (dom-node-value (dom-node-last-child root2))))))))
 
 
 ;;; fsproj-menu.el ends here
