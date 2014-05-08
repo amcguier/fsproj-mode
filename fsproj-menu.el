@@ -319,21 +319,11 @@ otherwise show all files in the project file directory."
   (let* ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
          entries)
     (dolist (file dir-file-list)
-      (if (and (not (file-directory-p file))
-               (not (assoc file project-file-entries))
-               (not (string= "fsproj" (file-name-extension file))))
+      (if (not (or (file-directory-p file)
+                   (assoc-string (file-name-nondirectory file) project-file-entries)
+                   (string= "fsproj" (file-name-extension file))))
           (push (file-entry (file-name-nondirectory file) "-" "." ".") entries)))
     (nreverse entries)))
-
-
-(eval-when-compile
-  (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let* ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (proj-entries (project-file-entries doc))
-           (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
-      proj-entries
-      )))
-
 
 
 ;;;###autoload
@@ -662,6 +652,15 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
         (assert (equal
                  (dom-node-value (dom-node-last-child root1))
                  (dom-node-value (dom-node-last-child root2))))))))
+
+;; Test: non-project-file-entries
+(eval-when-compile
+  (when (file-readable-p "TestProject/TestProject.fsproj")
+    (let* ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+           (proj-entries (project-file-entries doc))
+           (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
+      (assert (eq 1 (length non-proj-entries)))
+      (assert (string= "Foo.txt" (caar non-proj-entries))))))
 
 
 ;;; fsproj-menu.el ends here
