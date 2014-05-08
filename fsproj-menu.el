@@ -309,11 +309,6 @@ otherwise show all files in the project file directory."
     (nreverse entries)))
 
 
-(defun my-filter (condp lst)
-  (delq nil
-        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
-
-
 (defun non-project-file-entries (proj-file project-file-entries)
   "Returns the list of non-project files in the project directory."
   (let* ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
@@ -326,51 +321,16 @@ otherwise show all files in the project file directory."
     (nreverse entries)))
 
 
-;;;###autoload
-(defun all-files-under-dir
-  (dir &optional include-regexp  include-regexp-absolute-path-p exclude-regex exclude-regex-absolute-p)
-  "Return all files matched `include-regexp' under directory `dir'.
-if `include-regexp' is nil ,return all.
-when `include-regexp-absolute-path-p' is nil or omited ,filename is used to match `include-regexp'
-when `include-regexp-absolute-path-p' is t then full file path is used to match `include-regexp'
-when `exclude-regexp-absolute-path-p' is nil or omited ,filename is used to match `exclude-regexp'
-when `exclude-regexp-absolute-path-p' is t then full file path is used to match `exclude-regexp'
-"
-  (let((files (list dir))  matched-files head)
-    (while (> (length files) 0)
-      (setq head (pop files))
-      (when (file-readable-p head)
-        (if (and (eq dir head) (file-directory-p head))
-            (dolist (sub (directory-files head))
-              (when  (not (string-match "^\\.$\\|^\\.\\.$" sub))
-                (when (or (not exclude-regex)
-                          (and exclude-regex (not exclude-regex-absolute-p))
-                          (and exclude-regex exclude-regex-absolute-p  (not (string-match  exclude-regex  (expand-file-name sub head)))))
-                  (setq files (append (list (expand-file-name sub head)) files)))))
-          (if include-regexp
-              (if (string-match include-regexp (if include-regexp-absolute-path-p head (file-name-nondirectory head)))
-                  (if exclude-regex
-                      (if (not (string-match exclude-regex (if exclude-regex-absolute-p head (file-name-nondirectory head))))
-                          (add-to-list 'matched-files head))
-                    (add-to-list 'matched-files head)))
-            (if exclude-regex
-                (if (not (string-match exclude-regex (if exclude-regex-absolute-p head (file-name-nondirectory head))))
-                    (add-to-list 'matched-files head))
-              (add-to-list 'matched-files head))))))
-    matched-files))
-
-
-(defun compiled-file-p (compiled-file-list afile)
-  (member (file-name-nondirectory afile) compiled-file-list))
-
 (defun tabulated-list-entry-size-> (entry1 entry2)
   (> (string-to-number (aref (cadr entry1) 4))
      (string-to-number (aref (cadr entry2) 4))))
+
 
 (defun Fsproj-menu--pretty-name (name)
   (propertize name
               'font-lock-face 'buffer-menu-buffer
               'mouse-face 'highlight))
+
 
 (defun Fsproj-menu--pretty-file-name (file)
   (cond (file
@@ -392,6 +352,55 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
    ((not (stringp file)) "") ; Avoid errors
    (t
     (concat "(" (file-name-nondirectory file) ") " Info-current-node))))
+
+
+;;------------------------------------------------------------------------------
+;; Misc.
+;;------------------------------------------------------------------------------
+
+
+;;;###autoload
+(defun all-files-under-dir
+  (dir &optional include-regexp  include-regexp-absolute-path-p exclude-regex exclude-regex-absolute-p)
+  "Return all files matched `include-regexp' under directory `dir'.
+if `include-regexp' is nil ,return all.
+when `include-regexp-absolute-path-p' is nil or omited ,filename is used to match `include-regexp'
+when `include-regexp-absolute-path-p' is t then full file path is used to match `include-regexp'
+when `exclude-regexp-absolute-path-p' is nil or omited ,filename is used to match `exclude-regexp'
+when `exclude-regexp-absolute-path-p' is t then full file path is used to match `exclude-regexp'
+"
+  (let((files (list dir))  matched-files head)
+    (while (> (length files) 0)
+      (setq head (pop files))
+      (when (file-readable-p head)
+        (if (and (eq dir head) (file-directory-p head))
+            (dolist (sub (directory-files head))
+              (when  (not (string-match "^\\.$\\|^\\.\\.$" sub))
+                (when (or (not exclude-regex)
+                          (and exclude-regex (not exclude-regex-absolute-p))
+                          (and exclude-regex exclude-regex-absolute-p
+                               (not (string-match  exclude-regex  (expand-file-name sub head)))))
+                  (setq files (append (list (expand-file-name sub head)) files)))))
+          (if include-regexp
+              (if (string-match include-regexp
+                                (if include-regexp-absolute-path-p head (file-name-nondirectory head)))
+                  (if exclude-regex
+                      (if (not
+                           (string-match exclude-regex
+                                         (if exclude-regex-absolute-p head (file-name-nondirectory head))))
+                          (add-to-list 'matched-files head))
+                    (add-to-list 'matched-files head)))
+            (if exclude-regex
+                (if (not (string-match exclude-regex
+                                       (if exclude-regex-absolute-p head (file-name-nondirectory head))))
+                    (add-to-list 'matched-files head))
+              (add-to-list 'matched-files head))))))
+    matched-files))
+
+
+(defun my-filter (condp lst)
+  (delq nil
+        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
 
 
 ;;------------------------------------------------------------------------------
