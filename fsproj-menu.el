@@ -25,8 +25,11 @@
 ;; The Fsproj Menu is used to view, add, remove and order files within
 ;; a Visual Studio F# project. The entry point is M-x fsproj-menu.
 
+;; Package-Requires: ((dash "2.6.0"))
+
 ;;; Code:
 
+(require 'dash)
 (require 'dom)
 (require 'sgml-mode)
 (require 'skeleton)
@@ -82,6 +85,18 @@
 
 (defvar Info-current-file) ; from info.el
 (defvar Info-current-node) ; from info.el
+
+
+(defvar file-status-in "+"
+  "The string used to represent a file included in the project.")
+
+
+(defvar file-status-out "-"
+  "The string used to represent a file not included in the project.")
+
+
+(defvar file-status-missing "!"
+  "The string used to represent a file included in the project but missing from the file system.")
 
 
 (defvar Fsproj-menu-mode-map
@@ -187,6 +202,19 @@ See `Fsproj-menu-templates' for the list of supported templates."
 ;;------------------------------------------------------------------------------
 
 
+(defun move (file-name file-status fromIndex toIndex proj-doc)
+  "Move the file in the project doc from fromIndex to toIndex."
+  (if (string= file-status file-status-out)
+      (message "Cannot move %s, add file to project first." file-name)    
+    (progn
+      ;; Update the model
+      ;; (dom-node-insert-before NODE NEW-CHILD REF-CHILD)
+      ;; (dom-node-insert-before itemGroup node node-ref)
+      ;; Persist the model
+      ;; Update the view
+      (message "MOVE %s %s from %d to %d" file-status file-name fromIndex toIndex))))
+
+
 (defun Fsproj-menu-move (toIndex)
   "Move the current line's file to another position within the project."
   (interactive "nMove file to: ")
@@ -195,7 +223,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
          (entry (tabulated-list-get-entry))
          (fromIndex (string-to-number (aref entry 2)))
          (file-status (aref entry 0)))
-    (message "MOVE %s%s from %d to %d" file-status file-name fromIndex toIndex)))
+    (move file-name file-status fromIndex toIndex Fsproj-menu-proj-doc)))
 
 
 ;;------------------------------------------------------------------------------
@@ -294,7 +322,7 @@ otherwise show all files in the project file directory."
                  (let ((file-name (include-attr-value item)))
                    (push (file-entry
                           file-name
-                          (if (file-exists-p file-name) "+" "!")
+                          (if (file-exists-p file-name) file-status-in file-status-missing)
                           "C"
                           (number-to-string counter)) entries)))
                 ((eq name 'None)
@@ -302,7 +330,7 @@ otherwise show all files in the project file directory."
                  (let ((file-name (include-attr-value item)))
                    (push (file-entry
                           file-name
-                          (if (file-exists-p file-name) "+" "!")
+                          (if (file-exists-p file-name) file-status-in file-status-missing)
                           "N"
                           (number-to-string counter)) entries)))
                 ))))
@@ -317,7 +345,7 @@ otherwise show all files in the project file directory."
       (if (not (or (file-directory-p file)
                    (assoc-string (file-name-nondirectory file) project-file-entries)
                    (string= "fsproj" (file-name-extension file))))
-          (push (file-entry (file-name-nondirectory file) "-" "." ".") entries)))
+          (push (file-entry (file-name-nondirectory file) file-status-out "." ".") entries)))
     (nreverse entries)))
 
 
@@ -662,14 +690,46 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
                  (dom-node-value (dom-node-last-child root1))
                  (dom-node-value (dom-node-last-child root2))))))))
 
+
 ;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
     (let* ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
            (proj-entries (project-file-entries doc))
            (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
-      (assert (eq 1 (length non-proj-entries)))
-      (assert (string= "Foo.txt" (caar non-proj-entries))))))
+      (assert (<= 1 (length non-proj-entries))))))
 
+
+(defvar Fsproj-menu-file-item-tag-names '(Compile None)
+  "The tag names used for project file items.")
+
+
+(defun file-item-group-p (file-item-tag-names itemGroup)
+  "Returns t if the item group is the file item group otherwise nil"
+  (-any?
+   (lambda (child) (-contains? file-item-tag-names (dom-node-name child)))
+   (dom-node-child-nodes itemGroup))
+  )
+
+
+(defun file-item-group (file-item-tag-names project-document)
+  "If it exists then return the project ItemGroup containing the
+project files otherwise return nil."
+  (-first
+   (lambda (itemGroup) (file-item-group-p file-item-tag-names itemGroup))
+   (dom-document-get-elements-by-tag-name project-document 'ItemGroup)))
+
+
+;; Test: non-project-file-entries
+(eval-when-compile
+  (when (file-readable-p "TestProject/TestProject.fsproj")
+    (let* ((project-document (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
+      (assert (eq 2 (length (dom-document-get-elements-by-tag-name project-document 'ItemGroup))))   
+      (-contains? Fsproj-menu-file-item-tag-names (dom-node-name (nth 1 (dom-node-child-nodes (nth 1 (dom-document-get-elements-by-tag-name project-document 'ItemGroup)))))))
+    ))
+
+(-contains? 'Fsproj-menu-file-item-tag-names 'None)
+(-contains? '(None) 'None)
+(equal 'None 'None)
 
 ;;; fsproj-menu.el ends here
