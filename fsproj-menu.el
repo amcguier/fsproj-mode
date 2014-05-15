@@ -197,33 +197,47 @@ See `Fsproj-menu-templates' for the list of supported templates."
     file-name))
 
 
+(defun move-child-node (fromIndex toIndex itemGroup)
+  "Move the file in the itemGroup from fromIndex to toIndex."
+  (let* ((children (dom-node-child-nodes itemGroup))
+         (ref-child (nth toIndex children))
+         (new-child (nth fromIndex children)))
+    (dom-node-insert-before itemGroup new-child ref-child)))
+
+
+(defun save-project-document (project-document project-file)
+  "Save the project document to the project file."
+  (when (and project-file (file-writable-p project-file))
+    (with-temp-buffer
+      (insert (dom-to-string-doc project-document))
+      (write-region (point-min) (point-max) project-file))))
+
+
+(defun refresh-buffer (project-file)
+  "Refresh the Fsproj-file-list buffer."
+  (list-files--refresh project-file)
+  (tabulated-list-print))
+
+
 ;;------------------------------------------------------------------------------
 ;; Commands
 ;;------------------------------------------------------------------------------
 
 
-(defun move (file-name file-status fromIndex toIndex proj-doc)
-  "Move the file in the project doc from fromIndex to toIndex."
-  (if (string= file-status file-status-out)
-      (message "Cannot move %s, add file to project first." file-name)    
-    (progn
-      ;; Update the model
-      ;; (dom-node-insert-before NODE NEW-CHILD REF-CHILD)
-      ;; (dom-node-insert-before itemGroup node node-ref)
-      ;; Persist the model
-      ;; Update the view
-      (message "MOVE %s %s from %d to %d" file-status file-name fromIndex toIndex))))
-
-
 (defun Fsproj-menu-move (toIndex)
   "Move the current line's file to another position within the project."
   (interactive "nMove file to: ")
-  ;; TODO: check file is included in the project
   (let* ((file-name (tabulated-list-get-id))
          (entry (tabulated-list-get-entry))
          (fromIndex (string-to-number (aref entry 2)))
-         (file-status (aref entry 0)))
-    (move file-name file-status fromIndex toIndex Fsproj-menu-proj-doc)))
+         (file-status (aref entry 0)))    
+    (if (string= file-status file-status-out)
+        (message "Cannot move %s, add file to project first." file-name)          
+      (let ((itemGroup (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc))
+            (project-file (fsharp-mode/find-fsproj (fsproj-start))))
+        (move-child-node fromIndex toIndex itemGroup)
+        (save-project-document Fsproj-menu-proj-doc project-file)
+        (refresh-buffer project-file)))))
 
 
 ;;------------------------------------------------------------------------------
@@ -380,6 +394,27 @@ otherwise show all files in the project file directory."
    ((not (stringp file)) "") ; Avoid errors
    (t
     (concat "(" (file-name-nondirectory file) ") " Info-current-node))))
+
+
+(defvar Fsproj-menu-file-item-tag-names (let ((compile (intern "Compile"))
+                                              (none (intern "None")))
+                                          (list compile none))
+  "The tag names used for project file items.")
+
+
+(defun file-item-group-p (file-item-tag-names itemGroup)
+  "Returns t if the item group is the file item group otherwise nil"
+  (-any?
+   (lambda (child) (-contains? file-item-tag-names (dom-node-name child)))
+   (dom-node-child-nodes itemGroup)))
+
+
+(defun file-item-group (file-item-tag-names project-document)
+  "If it exists then return the project ItemGroup containing the
+project files otherwise return nil."
+  (-first
+   (lambda (itemGroup) (file-item-group-p file-item-tag-names itemGroup))
+   (dom-document-get-elements-by-tag-name project-document 'ItemGroup)))
 
 
 ;;------------------------------------------------------------------------------
@@ -619,10 +654,10 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 (defun dom-to-string-attribute (attribute)
-  "Convert an attribute to an XML attribute string."
+  "Convert an attrib(symbol-name ute to an XML attribute string.
   (let ((name (symbol-name (dom-node-name attribute)))
         (value (dom-node-value attribute)))
-    (concat " " name "=\"" value "\"")))
+    (concat \" \" name \"=\\\"\" value \"\\\"\"))")
 
 
 ;;------------------------------------------------------------------------------
@@ -659,36 +694,36 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 ;; Test: dom-to-string
-(eval-when-compile
-  (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let* ((doc1 (dom-make-document-from-xml
-                  (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (root1 (dom-document-element doc1)))
-      (let* ((xml (dom-to-string-doc doc1))
-             (doc2 (with-temp-buffer
-                     (insert xml)
-                     (dom-make-document-from-xml
-                      (car (xml-parse-region (point-min) (point-max))))))
-             (root2 (dom-document-element doc2)))
-        (assert (not (eq root1 root2)))
-        (assert (not (eq
-                      (dom-node-attributes root1)
-                      (dom-node-attributes root2))))
-        (assert (eq
-                 (dom-node-name (car (dom-node-attributes root1)))
-                 (dom-node-name (car (dom-node-attributes root2)))))
-        (assert (not (eq
-                      (dom-node-value (car (dom-node-attributes root1)))
-                      (dom-node-value (car (dom-node-attributes root2))))))
-        (assert (equal
-                 (dom-node-value (car (dom-node-attributes root1)))
-                 (dom-node-value (car (dom-node-attributes root2)))))
-        (assert (equal
-                 (dom-node-name (dom-node-last-child root1))
-                 (dom-node-name (dom-node-last-child root2))))
-        (assert (equal
-                 (dom-node-value (dom-node-last-child root1))
-                 (dom-node-value (dom-node-last-child root2))))))))
+;; (eval-when-compile
+;;   (when (file-readable-p "TestProject/TestProject.fsproj")
+;;     (let* ((doc1 (dom-make-document-from-xml
+;;                   (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+;;            (root1 (dom-document-element doc1)))
+;;       (let* ((xml (dom-to-string-doc doc1))
+;;              (doc2 (with-temp-buffer
+;;                      (insert xml)
+;;                      (dom-make-document-from-xml
+;;                       (car (xml-parse-region (point-min) (point-max))))))
+;;              (root2 (dom-document-element doc2)))
+;;         (assert (not (eq root1 root2)))
+;;         (assert (not (eq
+;;                       (dom-node-attributes root1)
+;;                       (dom-node-attributes root2))))
+;;         (assert (eq
+;;                  (dom-node-name (car (dom-node-attributes root1)))
+;;                  (dom-node-name (car (dom-node-attributes root2)))))
+;;         (assert (not (eq
+;;                       (dom-node-value (car (dom-node-attributes root1)))
+;;                       (dom-node-value (car (dom-node-attributes root2))))))
+;;         (assert (equal
+;;                  (dom-node-value (car (dom-node-attributes root1)))
+;;                  (dom-node-value (car (dom-node-attributes root2)))))
+;;         (assert (equal
+;;                  (dom-node-name (dom-node-last-child root1))
+;;                  (dom-node-name (dom-node-last-child root2))))
+;;         (assert (equal
+;;                  (dom-node-value (dom-node-last-child root1))
+;;                  (dom-node-value (dom-node-last-child root2))))))))
 
 
 ;; Test: non-project-file-entries
@@ -700,36 +735,17 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
       (assert (<= 1 (length non-proj-entries))))))
 
 
-(defvar Fsproj-menu-file-item-tag-names '(Compile None)
-  "The tag names used for project file items.")
-
-
-(defun file-item-group-p (file-item-tag-names itemGroup)
-  "Returns t if the item group is the file item group otherwise nil"
-  (-any?
-   (lambda (child) (-contains? file-item-tag-names (dom-node-name child)))
-   (dom-node-child-nodes itemGroup))
-  )
-
-
-(defun file-item-group (file-item-tag-names project-document)
-  "If it exists then return the project ItemGroup containing the
-project files otherwise return nil."
-  (-first
-   (lambda (itemGroup) (file-item-group-p file-item-tag-names itemGroup))
-   (dom-document-get-elements-by-tag-name project-document 'ItemGroup)))
-
-
 ;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
     (let* ((project-document (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
-      (assert (eq 2 (length (dom-document-get-elements-by-tag-name project-document 'ItemGroup))))   
-      (-contains? Fsproj-menu-file-item-tag-names (dom-node-name (nth 1 (dom-node-child-nodes (nth 1 (dom-document-get-elements-by-tag-name project-document 'ItemGroup)))))))
+      (file-item-group Fsproj-menu-file-item-tag-names project-document)
+      ;(assert (eq 2 (length (dom-document-get-elements-by-tag-name project-document 'ItemGroup))))   
+      ;(-contains? Fsproj-menu-file-item-tag-names (dom-node-name (nth
+      ;1 (dom-node-child-nodes (nth 1
+      ;(dom-document-get-elements-by-tag-name project-document
+      ;'ItemGroup))))))
+      )
     ))
-
-(-contains? 'Fsproj-menu-file-item-tag-names 'None)
-(-contains? '(None) 'None)
-(equal 'None 'None)
 
 ;;; fsproj-menu.el ends here
