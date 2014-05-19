@@ -51,7 +51,7 @@
   :group 'Fsproj-menu)
 (put 'Fsproj-menu-file 'face-alias 'fsproj-menu-file)
 
-(defcustom Fsproj-menu-name-width 19
+(defcustom Fsproj-menu-name-width 30
   "Width of file name column in the Fsproj Menu."
   :type 'number
   :group 'Fsproj-menu)
@@ -71,6 +71,10 @@
   project file. This is set by the prefix argument to
   `fsproj-menu' and related commands.")
 (make-variable-buffer-local 'Fsproj-menu-proj-only)
+
+(defvar Fsproj-menu-project-file nil
+  "The current project file.")
+(make-variable-buffer-local 'Fsproj-menu-project-file)
 
 (defvar Fsproj-menu-proj-doc nil
   "The current project file dom document.")
@@ -161,7 +165,6 @@ Menu."
     (call-interactively 'create-fsproj-file))
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
-     (setq Fsproj-menu-project-file (fsharp-mode/find-fsproj (fsproj-start)))
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
     (message "Commands: m, q to quit; ? for help.")))
 
@@ -234,11 +237,10 @@ See `Fsproj-menu-templates' for the list of supported templates."
          (file-status (aref entry 0)))    
     (if (string= file-status file-status-out)
         (message "Cannot move %s, add file to project first." file-name)          
-      (let ((itemGroup (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc))
-            (project-file (fsharp-mode/find-fsproj (fsproj-start))))
-        ;(move-child-node (- fromIndex 1) (- toIndex 1) itemGroup)
-        ;(save-project-document Fsproj-menu-proj-doc project-file)
-        ;(refresh-buffer project-file)
+      (let ((itemGroup (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc)))
+        (move-child-node (- fromIndex 1) (- toIndex 1) itemGroup)
+        (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+        (refresh-buffer Fsproj-menu-project-file)
         ))
     (message "foo")))
 
@@ -258,6 +260,7 @@ otherwise show all files in the project file directory."
       (Fsproj-menu-mode)
       (setq Fsproj-menu-proj-only
             (and proj-only (>= (prefix-numeric-value proj-only) 0)))
+      (setq Fsproj-menu-project-file proj-file)
       (setq Fsproj-menu-proj-doc
             (dom-make-document-from-xml (car (xml-parse-file proj-file))))
       (list-files--refresh proj-file)
@@ -696,37 +699,41 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 ;; Test: dom-to-string
-;; (eval-when-compile
-;;   (when (file-readable-p "TestProject/TestProject.fsproj")
-;;     (let* ((doc1 (dom-make-document-from-xml
-;;                   (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-;;            (root1 (dom-document-element doc1)))
-;;       (let* ((xml (dom-to-string-doc doc1))
-;;              (doc2 (with-temp-buffer
-;;                      (insert xml)
-;;                      (dom-make-document-from-xml
-;;                       (car (xml-parse-region (point-min) (point-max))))))
-;;              (root2 (dom-document-element doc2)))
-;;         (assert (not (eq root1 root2)))
-;;         (assert (not (eq
-;;                       (dom-node-attributes root1)
-;;                       (dom-node-attributes root2))))
-;;         (assert (eq
-;;                  (dom-node-name (car (dom-node-attributes root1)))
-;;                  (dom-node-name (car (dom-node-attributes root2)))))
-;;         (assert (not (eq
-;;                       (dom-node-value (car (dom-node-attributes root1)))
-;;                       (dom-node-value (car (dom-node-attributes root2))))))
-;;         (assert (equal
-;;                  (dom-node-value (car (dom-node-attributes root1)))
-;;                  (dom-node-value (car (dom-node-attributes root2)))))
-;;         (assert (equal
-;;                  (dom-node-name (dom-node-last-child root1))
-;;                  (dom-node-name (dom-node-last-child root2))))
-;;         (assert (equal
-;;                  (dom-node-value (dom-node-last-child root1))
-;;                  (dom-node-value (dom-node-last-child root2))))))))
+(eval-when-compile
+  (when (file-readable-p "TestProject/TestProject.fsproj")
+    (let* ((doc1 (dom-make-document-from-xml
+                  (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+           (root1 (dom-document-element doc1)))
+      (let* ((xml (dom-to-string-doc doc1))
+             (doc2 (with-temp-buffer
+                     (insert xml)
+                     (dom-make-document-from-xml
+                      (car (xml-parse-region (point-min) (point-max))))))
+             (root2 (dom-document-element doc2)))
+        ;;(assert (not (eq root1 root2)))
+        ;; (assert (not (eq
+        ;;               (dom-node-attributes root1)
+        ;;               (dom-node-attributes root2))))
+        ;; (assert (eq
+        ;;          (dom-node-name (car (dom-node-attributes root1)))
+        ;;          (dom-node-name (car (dom-node-attributes root2)))))
+        ;; (assert (not (eq
+        ;;               (dom-node-value (car (dom-node-attributes root1)))
+        ;;               (dom-node-value (car (dom-node-attributes root2))))))
+        ;; (assert (equal
+        ;;          (dom-node-value (car (dom-node-attributes root1)))
+        ;;          (dom-node-value (car (dom-node-attributes root2)))))
+        ;; (assert (equal
+        ;;          (dom-node-name (dom-node-last-child root1))
+        ;;          (dom-node-name (dom-node-last-child root2))))
+        ;; (assert (equal
+        ;;          (dom-node-value (dom-node-last-child root1))
+        ;;          (dom-node-value (dom-node-last-child root2))))
+        ))))
 
+    (let* ((doc1 (dom-make-document-from-xml
+                  (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+           (root1 (dom-document-element doc1)))
 
 ;; Test: non-project-file-entries
 (eval-when-compile
