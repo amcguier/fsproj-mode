@@ -161,6 +161,7 @@ Menu."
     (call-interactively 'create-fsproj-file))
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
+     (setq Fsproj-menu-project-file (fsharp-mode/find-fsproj (fsproj-start)))
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
     (message "Commands: m, q to quit; ? for help.")))
 
@@ -235,10 +236,11 @@ See `Fsproj-menu-templates' for the list of supported templates."
         (message "Cannot move %s, add file to project first." file-name)          
       (let ((itemGroup (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc))
             (project-file (fsharp-mode/find-fsproj (fsproj-start))))
-        (move-child-node fromIndex toIndex itemGroup)
-        (save-project-document Fsproj-menu-proj-doc project-file)
-        (refresh-buffer project-file)))))
-
+        ;(move-child-node (- fromIndex 1) (- toIndex 1) itemGroup)
+        ;(save-project-document Fsproj-menu-proj-doc project-file)
+        ;(refresh-buffer project-file)
+        ))
+    (message "foo")))
 
 ;;------------------------------------------------------------------------------
 
