@@ -659,10 +659,10 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 (defun dom-to-string-attribute (attribute)
-  "Convert an attrib(symbol-name ute to an XML attribute string.
+  "Convert an attribute to an XML attribute string."
   (let ((name (symbol-name (dom-node-name attribute)))
         (value (dom-node-value attribute)))
-    (concat \" \" name \"=\\\"\" value \"\\\"\"))")
+    (concat " " name "=\"" value "\"")))
 
 
 ;;------------------------------------------------------------------------------
@@ -710,30 +710,27 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
                      (dom-make-document-from-xml
                       (car (xml-parse-region (point-min) (point-max))))))
              (root2 (dom-document-element doc2)))
-        ;;(assert (not (eq root1 root2)))
-        ;; (assert (not (eq
-        ;;               (dom-node-attributes root1)
-        ;;               (dom-node-attributes root2))))
-        ;; (assert (eq
-        ;;          (dom-node-name (car (dom-node-attributes root1)))
-        ;;          (dom-node-name (car (dom-node-attributes root2)))))
-        ;; (assert (not (eq
-        ;;               (dom-node-value (car (dom-node-attributes root1)))
-        ;;               (dom-node-value (car (dom-node-attributes root2))))))
-        ;; (assert (equal
-        ;;          (dom-node-value (car (dom-node-attributes root1)))
-        ;;          (dom-node-value (car (dom-node-attributes root2)))))
-        ;; (assert (equal
-        ;;          (dom-node-name (dom-node-last-child root1))
-        ;;          (dom-node-name (dom-node-last-child root2))))
-        ;; (assert (equal
-        ;;          (dom-node-value (dom-node-last-child root1))
-        ;;          (dom-node-value (dom-node-last-child root2))))
+        (assert (not (eq root1 root2)))
+        (assert (not (eq
+                      (dom-node-attributes root1)
+                      (dom-node-attributes root2))))
+        (assert (eq
+                 (dom-node-name (car (dom-node-attributes root1)))
+                 (dom-node-name (car (dom-node-attributes root2)))))
+        (assert (not (eq
+                      (dom-node-value (car (dom-node-attributes root1)))
+                      (dom-node-value (car (dom-node-attributes root2))))))
+        (assert (equal
+                 (dom-node-value (car (dom-node-attributes root1)))
+                 (dom-node-value (car (dom-node-attributes root2)))))
+        (assert (equal
+                 (dom-node-name (dom-node-last-child root1))
+                 (dom-node-name (dom-node-last-child root2))))
+        (assert (equal
+                 (dom-node-value (dom-node-last-child root1))
+                 (dom-node-value (dom-node-last-child root2))))
         ))))
 
-    (let* ((doc1 (dom-make-document-from-xml
-                  (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (root1 (dom-document-element doc1)))
 
 ;; Test: non-project-file-entries
 (eval-when-compile
@@ -747,14 +744,12 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 ;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let* ((project-document (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
-      (file-item-group Fsproj-menu-file-item-tag-names project-document)
-      ;(assert (eq 2 (length (dom-document-get-elements-by-tag-name project-document 'ItemGroup))))   
-      ;(-contains? Fsproj-menu-file-item-tag-names (dom-node-name (nth
-      ;1 (dom-node-child-nodes (nth 1
-      ;(dom-document-get-elements-by-tag-name project-document
-      ;'ItemGroup))))))
-      )
-    ))
+    (let* ((project-document (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+           (item-group (file-item-group Fsproj-menu-file-item-tag-names project-document)))
+      (move-child-node 0 2 item-group)
+      (mapcar (lambda (item) (if (dom-text-p item)
+                            (dom-text-value item)
+                          (dom-node-value (car (dom-node-attributes item))))) (dom-node-child-nodes item-group))
+      )))
 
 ;;; fsproj-menu.el ends here
