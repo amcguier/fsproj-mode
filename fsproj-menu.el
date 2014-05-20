@@ -620,7 +620,7 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 ;;------------------------------------------------------------------------------
-;; DOM to string
+;; DOM extensions
 ;;------------------------------------------------------------------------------
 
 
@@ -663,6 +663,46 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
   (let ((name (symbol-name (dom-node-name attribute)))
         (value (dom-node-value attribute)))
     (concat " " name "=\"" value "\"")))
+
+
+(defun dom-document-get-elements-by-attribute-value (doc attribute-name attribute-value)
+  "Return a list of elements with an attribute with the given ATTRIBUTE-NAME and ATTRIBUTE-VALUE.
+The special value \"*\" matches all attribute values."
+  (dom-element-get-elements-by-attribute-value-1 (dom-document-element doc) attribute-name attribute-value))
+
+
+(defun dom-element-get-elements-by-attribute-value (element attribute-name attribute-value)
+  "Return a list of descendant elements of ELEMENT with the given ATTRIBUTE-NAME and ATTRIBUTE-VALUE.
+The special value \"*\" matches all attribute values."
+  (dom-element-get-elements-by-attribute-value-1 (dom-element-first-child element) attribute-name attribute-value))
+
+
+(defun dom-element-get-elements-by-attribute-value-1 (element attribute-name attribute-value)
+  "Return a list of elements with the given ATTRIBUTE-NAME and ATTRIBUTE-VALUE.
+The elements are ELEMENT, its siblings and their descendants. This is used by
+`dom-document-get-elements-by-attribute-value' and `dom-element-get-elements-by-attribute-value'."
+  (let (stack result)
+    (while element
+      (when (dom-element-attribute-value-p element attribute-name attribute-value)
+        (setq result (cons element result)))
+      (setq element
+            (cond ((dom-node-first-child element)
+                   (when (dom-node-next-sibling element)
+                     (push (dom-node-next-sibling element) stack))
+                   (dom-node-first-child element))
+                  ((dom-node-next-sibling element))
+                  (t (pop stack)))))
+    (nreverse result)))
+
+
+(defun dom-element-attribute-value-p (element attribute-name attribute-value)
+  "Returns t if ELEMENT has an attribute named ATTRIBUTE-NAME with a value ATTRIBUTE-VALUE.
+The special value \"*\" matches all attribute values."
+  (-any? (lambda (attribute)
+           (and (string= (dom-node-name attribute) attribute-name)
+                (or (string= attribute-value "*")
+                    (string= (dom-node-value attribute) attribute-value))))
+         (dom-node-attributes element)))
 
 
 ;;------------------------------------------------------------------------------
@@ -741,15 +781,12 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
       (assert (<= 1 (length non-proj-entries))))))
 
 
-;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
     (let* ((project-document (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
            (item-group (file-item-group Fsproj-menu-file-item-tag-names project-document)))
-      (move-child-node 0 2 item-group)
-      (mapcar (lambda (item) (if (dom-text-p item)
-                            (dom-text-value item)
-                          (dom-node-value (car (dom-node-attributes item))))) (dom-node-child-nodes item-group))
+      (dom-element-get-elements-by-attribute-value item-group "Include" "Script.fsx")
+      ;;(move-child-node 0 2 item-group)
       )))
 
 ;;; fsproj-menu.el ends here
