@@ -201,12 +201,11 @@ See `Fsproj-menu-templates' for the list of supported templates."
     file-name))
 
 
-(defun move-child-node (fromIndex toIndex itemGroup)
+(defun move-child-node (item-group from-file-name to-file-name)
   "Move the file in the itemGroup from fromIndex to toIndex."
-  (let* ((children (dom-node-child-nodes itemGroup))
-         (ref-child (nth toIndex children))
-         (new-child (nth fromIndex children)))
-    (dom-node-insert-before itemGroup new-child ref-child)))
+  (let ((new-child (car (dom-element-get-elements-by-attribute-value item-group "Include" from-file-name)))
+        (ref-child (car (dom-element-get-elements-by-attribute-value item-group "Include" to-file-name))))
+    (dom-node-insert-before item-group new-child ref-child)))
 
 
 (defun save-project-document (project-document project-file)
@@ -228,21 +227,23 @@ See `Fsproj-menu-templates' for the list of supported templates."
 ;;------------------------------------------------------------------------------
 
 
-(defun Fsproj-menu-move (toIndex)
+(defun Fsproj-menu-move (to-index)
   "Move the current line's file to another position within the project."
   (interactive "nMove file to: ")
-  (let* ((file-name (tabulated-list-get-id))
+  (let* ((from-file-name (tabulated-list-get-id))
          (entry (tabulated-list-get-entry))
-         (fromIndex (string-to-number (aref entry 2)))
-         (file-status (aref entry 0)))    
+         (from-index (string-to-number (aref entry 2)))
+         (file-status (aref entry 0))
+         (to-file-name (tabulated-list-get-id (- to-index 1))))    
     (if (string= file-status file-status-out)
         (message "Cannot move %s, add file to project first." file-name)          
-      (let ((itemGroup (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc)))
-        (move-child-node (- fromIndex 1) (- toIndex 1) itemGroup)
+      (let ((item-group (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc)))
+        (move-child-node item-group from-file-name to-file-name)
         (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
         (refresh-buffer Fsproj-menu-project-file)
         ))
     (message "foo")))
+
 
 ;;------------------------------------------------------------------------------
 
