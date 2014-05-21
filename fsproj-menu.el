@@ -107,7 +107,18 @@
   (let ((map (make-sparse-keymap))
         (menu-map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
+    (define-key map "e" 'Fsproj-menu-find-file)
+    (define-key map "f" 'Fsproj-menu-find-file)
+    (define-key map "\C-m" 'Fsproj-menu-find-file)    
+    (put 'Fsproj-menu-find-file :advertised-binding "\C-m")
+    (define-key map "o" 'Fsproj-menu-find-file-other-window)
     (define-key map "m" 'Fsproj-menu-move)
+    (define-key map [menu-bar immediate find-file-other-window]
+      '(menu-item "Find in Other Window" Fsproj-menu-find-file-other-window
+		  :help "Edit file at cursor in other window"))
+    (define-key map [menu-bar immediate find-file]
+      '(menu-item "Find This File" Fsproj-menu-find-file
+                  :help "Edit file at cursor"))
     ;; TODO: define bindings
     (bindings--define-key menu-map [quit]
       '(menu-item "Quit" quit-window
@@ -118,6 +129,7 @@
     position in the project file")) map)
   "Local keymap for `Fsproj-menu-mode' buffers.")
 
+
 (define-derived-mode Fsproj-menu-mode tabulated-list-mode "Fsproj Menu"
   "Major mode for Fsproj Menu buffers.
 The Fsproj Menu is invoked by the commands \\[fsproj-menu] and
@@ -126,8 +138,10 @@ of its contents.
 
 In Fsproj Menu mode, the following commands are defined:
 \\<Fsproj-menu-mode-map>
-\\[quit-window]    Remove the Fsproj Menu from the display.
-\\[Fsproj-menu-move]    Move the current line's file."
+Type \\[Fsproj-menu-find-file] to Find the current line's file.
+Type \\[Fsproj-menu-find-file-other-window] to find file in Other window.
+Type \\[quit-window]    Remove the Fsproj Menu from the display.
+Type \\[Fsproj-menu-move]    Move the current line's file."
   (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
 
 
@@ -166,7 +180,7 @@ Menu."
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
-    (message "Commands: m, q to quit; ? for help.")))
+    (message "Commands: f, o, m, q to quit; ? for help.")))
 
 
 (defun fsproj-menu-other-window (&optional arg)
@@ -182,7 +196,7 @@ ARG, show only files that are in the project file."
   (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer-other-window
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg)))
-  (message "Commands: m, q to quit; ? for help."))
+  (message "Commands: f, o, m, q to quit; ? for help."))
 
 
 (defun create-fsproj-file (file-name template)
@@ -262,6 +276,34 @@ See `Fsproj-menu-templates' for the list of supported templates."
 ;;------------------------------------------------------------------------------
 ;; Commands
 ;;------------------------------------------------------------------------------
+
+
+(defun Fsproj-menu-get-file-for-visit ()
+  "Get the current line's file name, with an error if file does not exist."
+  (interactive)
+  ;; We pass t for second arg so that we don't get error for `.' and `..'.
+  (let ((raw (tabulated-list-get-id))
+        file-name)
+    (if (null raw)
+        (error "No file on this line"))
+    (setq file-name (file-name-sans-versions raw t))
+    (if (file-exists-p file-name)
+        file-name
+      (if (file-symlink-p file-name)
+          (error "File is a symlink to a nonexistent target")
+        (error "File no longer exists; type `g' to update Fsproj-menu buffer")))))
+
+
+(defun Fsproj-menu-find-file ()
+  "In Fsproj-menu, visit the file named on this line."
+  (interactive)
+  (find-file (Fsproj-menu-get-file-for-visit)))
+
+
+(defun Fsproj-menu-find-file-other-window ()
+  "In Fsproj-menu, visit this file in another window."
+  (interactive)
+  (find-file-other-window (Fsproj-menu-get-file-for-visit)))
 
 
 (defun Fsproj-menu-move (to-position)
