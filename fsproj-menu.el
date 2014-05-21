@@ -221,13 +221,10 @@ See `Fsproj-menu-templates' for the list of supported templates."
 
 (defun refresh-buffer (project-file)
   "Refresh the Fsproj-file-list buffer."
+  (setq Fsproj-menu-proj-doc
+        (dom-make-document-from-xml (car (xml-parse-file project-file))))
   (list-files--refresh project-file)
   (tabulated-list-print))
-
-
-;;------------------------------------------------------------------------------
-;; Commands
-;;------------------------------------------------------------------------------
 
 
 (defun entry-vector-file-status (entry-vector)
@@ -250,27 +247,32 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (cadr entry))
 
 
-(defun entry-vector-file-included-p (entry-vector)
+(defun entry-vector-included-file-p (entry-vector)
   "Returns t if the entry-vector is for a file included in the project."
   (not (string= (entry-vector-file-status entry-vector) file-status-out)))
 
 
-(defun tabulated-list-entry-by-file-position (entries file-position)
+(defun tabulated-list-get-entry-by-file-position (file-position)
   "Returns the file name at the INDEX in the tabulated list"
   (-first (lambda (entry)
             (eq file-position
-                (entry-vector-file-position (entry-vector entry)))) entries))
+                (entry-vector-file-position (entry-vector entry)))) tabulated-list-entries))
+
+
+;;------------------------------------------------------------------------------
+;; Commands
+;;------------------------------------------------------------------------------
 
 
 (defun Fsproj-menu-move (to-position)
   "Move the current line's file to another position within the project."
   (interactive "nMove file to: ")
-  (let* ((from-file-name (tabulated-list-get-id))
-         (entry-vector (tabulated-list-get-entry)))    
-    (if (entry-vector-file-included-p entry-vector)
+  (let ((from-file-name (tabulated-list-get-id))
+        (entry-vector (tabulated-list-get-entry)))    
+    (if (entry-vector-included-file-p entry-vector)
         (let ((item-group (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc))
               (from-position (entry-vector-file-position entry-vector))
-              (to-file-name (entry-id (tabulated-list-entry-by-file-position tabulated-list-entries to-position))))
+              (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
           (unless (eq from-position to-position)
             (move-child-node item-group from-position from-file-name to-position to-file-name)
             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
@@ -814,17 +816,5 @@ The special value \"*\" matches all attribute values."
            (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
       (assert (<= 1 (length non-proj-entries))))))
 
-
-(eval-when-compile
-  (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let* ((project-document (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (item-group (file-item-group Fsproj-menu-file-item-tag-names project-document)))
-      ;;(dom-element-get-elements-by-attribute-value item-group "Include" "Script.fsx")
-      ;;(move-child-node item-group "MissingNone.txt" "AssemblyInfo.fs")
-      ;; (let ((new-child (car (dom-element-get-elements-by-attribute-value item-group "Include" "Script.fsx")))
-      ;;       (ref-child (car (dom-element-get-elements-by-attribute-value item-group "Include" "AssemblyInfo.fs"))))
-      ;;   (dom-node-insert-before item-group new-child ref-child))
-      (dom-to-string-node item-group)
-      )))
 
 ;;; fsproj-menu.el ends here
