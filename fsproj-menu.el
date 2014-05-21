@@ -111,6 +111,7 @@
     (define-key map "f" 'Fsproj-menu-find-file)
     (define-key map "\C-m" 'Fsproj-menu-find-file)    
     (put 'Fsproj-menu-find-file :advertised-binding "\C-m")
+    (define-key map "g" 'Fsproj-menu-refresh-buffer)
     (define-key map "o" 'Fsproj-menu-find-file-other-window)
     (define-key map "m" 'Fsproj-menu-move)
     (define-key map [menu-bar immediate find-file-other-window]
@@ -281,7 +282,6 @@ See `Fsproj-menu-templates' for the list of supported templates."
 (defun Fsproj-menu-get-file-for-visit ()
   "Get the current line's file name, with an error if file does not exist."
   (interactive)
-  ;; We pass t for second arg so that we don't get error for `.' and `..'.
   (let ((raw (tabulated-list-get-id))
         file-name)
     (if (null raw)
@@ -291,7 +291,10 @@ See `Fsproj-menu-templates' for the list of supported templates."
         file-name
       (if (file-symlink-p file-name)
           (error "File is a symlink to a nonexistent target")
-        (error "File no longer exists; type `g' to update Fsproj-menu buffer")))))
+        ;(error "File no longer exists; type `g' to update Fsproj-menu
+;buffer")
+        file-name
+        ))))
 
 
 (defun Fsproj-menu-find-file ()
@@ -320,6 +323,12 @@ See `Fsproj-menu-templates' for the list of supported templates."
             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
             (refresh-buffer Fsproj-menu-project-file)))
       (message "Cannot move %s, add file to project first." from-file-name))))
+
+
+(defun Fsproj-menu-refresh-buffer ()
+  "Refresh the contents of the current Fsproj-menu buffer."
+  (interactive)
+  (refresh-buffer Fsproj-menu-project-file))
 
 
 ;;------------------------------------------------------------------------------
