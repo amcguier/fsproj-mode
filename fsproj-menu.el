@@ -488,9 +488,12 @@ otherwise show all files in the project file directory."
     (concat "(" (file-name-nondirectory file) ") " Info-current-node))))
 
 
-(defvar Fsproj-menu-file-item-tag-names (let ((compile (intern "Compile"))
-                                              (none (intern "None")))
-                                          (list compile none))
+(defvar Fsproj-menu-file-item-tag-names
+  (let ((compile (intern "Compile"))
+        (content (intern "Content"))
+        (embedded-resource (intern "EmbeddedResource"))
+        (none (intern "None")))
+    (list compile content embedded-resource none))
   "The tag names used for project file items.")
 
 
