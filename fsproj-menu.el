@@ -489,11 +489,10 @@ otherwise show all files in the project file directory."
 
 
 (defvar Fsproj-menu-file-item-tag-names
-  (let ((compile (intern "Compile"))
-        (content (intern "Content"))
-        (embedded-resource (intern "EmbeddedResource"))
-        (none (intern "None")))
-    (list compile content embedded-resource none))
+  (list (intern "None")
+        (intern "Compile")
+        (intern "Content")
+        (intern "EmbeddedResource"))
   "The tag names used for project file items.")
 
 
