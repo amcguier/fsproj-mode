@@ -356,7 +356,7 @@ otherwise show all files in the project file directory."
 
 
 (defun file-number-p (e1 e2)
-  "Returns non-nil is the first entry should sort before the second entry."
+  "Returns non-nil if the first entry should sort before the second entry."
   (let ((n1 (elt (cadr e1) 2))
         (n2 (elt (cadr e2) 2)))
     (cond ((and (string= "." n1) (string= "." n2))
@@ -378,16 +378,16 @@ otherwise show all files in the project file directory."
     (setq tabulated-list-format
           (vector
            '("S" 1 t)
-           '("T" 1 t)
+           '("Type" 15 t)
            `("No." 3 file-number-p :right-align t)
            `("File" ,name-width t)
            `("Size" ,size-width tabulated-list-entry-size-> :right-align t))))
   (setq tabulated-list-sort-key (cons "No." nil))
   (setq tabulated-list-use-header-line Fsproj-menu-use-header-line)
   (if Fsproj-menu-proj-only
-      (let ((project-file-list (project-file-entries Fsproj-menu-proj-doc)))
+      (let ((project-file-list (project-item-entries Fsproj-menu-proj-doc)))
         (setq tabulated-list-entries project-file-list))
-    (let* ((project-file-list (project-file-entries Fsproj-menu-proj-doc))
+    (let* ((project-file-list (project-item-entries Fsproj-menu-proj-doc))
            (non-project-file-list
             (non-project-file-entries proj-file project-file-list)))
       (setq tabulated-list-entries (append non-project-file-list project-file-list))))
@@ -401,7 +401,7 @@ otherwise show all files in the project file directory."
           (vector
            ;; file status
            file-status
-           ;; file type: compiled or non-compiled
+           ;; file type
            file-type
            ;; file index
            file-index
@@ -411,48 +411,47 @@ otherwise show all files in the project file directory."
            (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs)))))))
 
 
-(defun include-attr-value (node)
+(defun include-attr-value (project-item)
   "Returns the value of the Include attribute."
-  (dom-node-value (car (dom-node-attributes node))))
+  (dom-node-value (car (dom-node-attributes project-item))))
 
 
-(defun project-file-entries (project)
-  "Returns a list of the files included in the project."
-  (let ((counter 0)
-        (entries))
-    (dolist (itemGroup (dom-document-get-elements-by-tag-name project 'ItemGroup))
-      (dolist (item (dom-node-child-nodes itemGroup))
-        (let ((name (dom-node-name item)))
-          (cond ((eq name 'Compile)
-                 (setq counter (incf counter))
-                 (let ((file-name (include-attr-value item)))
-                   (push (file-entry
-                          file-name
-                          (if (file-exists-p file-name) file-status-in file-status-missing)
-                          "C"
-                          (number-to-string counter)) entries)))
-                ((eq name 'None)
-                 (setq counter (incf counter))
-                 (let ((file-name (include-attr-value item)))
-                   (push (file-entry
-                          file-name
-                          (if (file-exists-p file-name) file-status-in file-status-missing)
-                          "N"
-                          (number-to-string counter)) entries)))
-                ))))
-    (nreverse entries)))
+(defun project-item-entry (compile-item-count item)
+  "Returns a single item included in the project as a table entry."
+  (let ((name (dom-node-name item))
+        (file-name (include-attr-value item)))
+    (file-entry
+     file-name
+     (if (file-exists-p file-name) file-status-in file-status-missing)
+     (symbol-name name)
+     (if (eq name 'Compile) (number-to-string compile-item-count) "n/a"))))
+
+
+(defun project-item-entries (project)
+  "Returns a list of items included in the project as table entries."
+  (let ((item-groups (dom-document-get-elements-by-tag-name project 'ItemGroup))
+        (compile-item-count 0)
+        (item-entries))
+    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))
+      (dolist (item (dom-node-child-nodes item-group))
+        (let (name (dom-node-name item))
+          (when (-contains? Fsproj-menu-item-tag-names name)
+            (if (eq name 'Compile)
+                (setq compile-item-count (incf compile-item-count)))
+            (push (project-item-entry compile-item-count item) item-entries)))))
+    (nreverse item-entries)))
 
 
 (defun non-project-file-entries (proj-file project-file-entries)
   "Returns the list of non-project files in the project directory."
-  (let* ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
-         entries)
+  (let ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
+        file-entries)
     (dolist (file dir-file-list)
       (if (not (or (file-directory-p file)
                    (assoc-string (file-name-nondirectory file) project-file-entries)
                    (string= "fsproj" (file-name-extension file))))
-          (push (file-entry (file-name-nondirectory file) file-status-out "." ".") entries)))
-    (nreverse entries)))
+          (push (file-entry (file-name-nondirectory file) file-status-out "" "") file-entries)))
+    (nreverse file-entries)))
 
 
 (defun tabulated-list-entry-size-> (entry1 entry2)
@@ -488,7 +487,7 @@ otherwise show all files in the project file directory."
     (concat "(" (file-name-nondirectory file) ") " Info-current-node))))
 
 
-(defvar Fsproj-menu-file-item-tag-names
+(defvar Fsproj-menu-item-tag-names
   (list (intern "None")
         (intern "Compile")
         (intern "Content")
@@ -865,7 +864,7 @@ The special value \"*\" matches all attribute values."
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
     (let* ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (proj-entries (project-file-entries doc))
+           (proj-entries (project-item-entries doc))
            (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
       (assert (<= 1 (length non-proj-entries))))))
 
