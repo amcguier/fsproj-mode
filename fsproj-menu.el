@@ -378,9 +378,9 @@ otherwise show all files in the project file directory."
     (setq tabulated-list-format
           (vector
            '("S" 1 t)
-           '("Type" 15 t)
            `("No." 3 file-number-p :right-align t)
            `("File" ,name-width t)
+           '("Type" 18 t)
            `("Size" ,size-width tabulated-list-entry-size-> :right-align t))))
   (setq tabulated-list-sort-key (cons "No." nil))
   (setq tabulated-list-use-header-line Fsproj-menu-use-header-line)
@@ -401,12 +401,12 @@ otherwise show all files in the project file directory."
           (vector
            ;; file status
            file-status
-           ;; file type
-           file-type
            ;; file index
            file-index
            ;; file name
            (Fsproj-menu--pretty-name file-name)
+           ;; file type
+           file-type
            ;; file size
            (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs)))))))
 
@@ -424,17 +424,17 @@ otherwise show all files in the project file directory."
      file-name
      (if (file-exists-p file-name) file-status-in file-status-missing)
      (symbol-name name)
-     (if (eq name 'Compile) (number-to-string compile-item-count) "n/a"))))
+     (if (eq name 'Compile) (number-to-string compile-item-count) ""))))
 
 
 (defun project-item-entries (project)
   "Returns a list of items included in the project as table entries."
-  (let ((item-groups (dom-document-get-elements-by-tag-name project 'ItemGroup))
-        (compile-item-count 0)
+  (let ((compile-item-count 0)
         (item-entries))
-    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))
+    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))      (print (length ()))
       (dolist (item (dom-node-child-nodes item-group))
-        (let (name (dom-node-name item))
+        (let ((name (dom-node-name item)))
+          (print name)
           (when (-contains? Fsproj-menu-item-tag-names name)
             (if (eq name 'Compile)
                 (setq compile-item-count (incf compile-item-count)))
@@ -863,10 +863,8 @@ The special value \"*\" matches all attribute values."
 ;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let* ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (proj-entries (project-item-entries doc))
-           (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
-      (assert (<= 1 (length non-proj-entries))))))
+    (let ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
+      (project-item-entries doc))))
 
 
 ;;; fsproj-menu.el ends here
