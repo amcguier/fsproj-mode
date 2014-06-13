@@ -315,7 +315,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (let ((from-file-name (tabulated-list-get-id))
         (entry-vector (tabulated-list-get-entry)))    
     (if (entry-vector-included-file-p entry-vector)
-        (let ((item-group (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc))
+        (let ((item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
               (from-position (entry-vector-file-position entry-vector))
               (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
           (unless (eq from-position to-position)
@@ -431,7 +431,7 @@ otherwise show all files in the project file directory."
   "Returns a list of items included in the project as table entries."
   (let ((compile-item-count 0)
         (item-entries))
-    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))      (print (length ()))
+    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))
       (dolist (item (dom-node-child-nodes item-group))
         (let ((name (dom-node-name item)))
           (print name)
