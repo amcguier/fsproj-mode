@@ -216,15 +216,17 @@ See `Fsproj-menu-templates' for the list of supported templates."
     file-name))
 
 
-(defun move-child-node (item-group from-position from-file-name to-position to-file-name)
+(defun move-file-item (doc from-position from-file-name to-position to-file-name)
   "Move the file in the itemGroup from fromIndex to toIndex."
-  (let ((new-child (car (dom-element-get-elements-by-attribute-value item-group "Include" from-file-name)))
-        (ref-child (car (dom-element-get-elements-by-attribute-value item-group "Include" to-file-name))))
+  (let* ((root (dom-document-element doc))
+         (new-child (car (dom-element-get-elements-by-attribute-value root "Include" from-file-name)))
+         (item-group (dom-node-parent-node new-child))
+         (ref-child (car (dom-element-get-elements-by-attribute-value root "Include" to-file-name))))
     (cond ((< from-position to-position)
            (dom-node-insert-before item-group new-child (dom-node-next-sibling ref-child)))
           ((> from-position to-position)
            (dom-node-insert-before item-group new-child ref-child)))))
-
+ 
 
 (defun save-project-document (project-document project-file)
   "Save the project document to the project file."
@@ -319,7 +321,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
               (from-position (entry-vector-file-position entry-vector))
               (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
           (unless (eq from-position to-position)
-            (move-child-node item-group from-position from-file-name to-position to-file-name)
+            (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-position to-file-name)
             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
             (refresh-buffer Fsproj-menu-project-file)))
       (message "Cannot move %s, add file to project first." from-file-name))))
@@ -864,7 +866,7 @@ The special value \"*\" matches all attribute values."
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
     (let ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
-      (project-item-entries doc))))
+      (move-file-item doc 1 "Foo.fsi" 4 "Program.fs"))))
 
 
 ;;; fsproj-menu.el ends here
