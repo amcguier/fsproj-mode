@@ -381,8 +381,9 @@ otherwise show all files in the project file directory."
           (vector
            '("S" 1 t)
            `("No." 3 file-number-p :right-align t)
-           `("File" ,name-width t)
-           '("Type" 18 t)
+           `("File Name" ,name-width t)
+           '("Build Action" 18 t)
+           '("Copy Action" 18 t)
            `("Size" ,size-width tabulated-list-entry-size-> :right-align t))))
   (setq tabulated-list-sort-key (cons "No." nil))
   (setq tabulated-list-use-header-line Fsproj-menu-use-header-line)
@@ -396,21 +397,12 @@ otherwise show all files in the project file directory."
   (tabulated-list-init-header))
 
 
-(defun file-entry (file-name file-status file-type file-index)
+(defun file-entry (status index file-name build-action copy-action)
   "Returns an Fsproj-menu file entry for a file."
-  (let ((file-attrs (file-attributes file-name)))
-    (list file-name
-          (vector
-           ;; file status
-           file-status
-           ;; file index
-           file-index
-           ;; file name
-           (Fsproj-menu--pretty-name file-name)
-           ;; file type
-           file-type
-           ;; file size
-           (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs)))))))
+  (let* ((file-attrs (file-attributes file-name))
+         (size (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs))))
+         (display-name (Fsproj-menu--pretty-name file-name)))
+    (list file-name (vector status index display-name build-action copy-action size))))
 
 
 (defun include-attr-value (project-item)
@@ -418,15 +410,23 @@ otherwise show all files in the project file directory."
   (dom-node-value (car (dom-node-attributes project-item))))
 
 
+(defun project-item-copy-action (item)
+  "Returns the ITEM copy action."
+  (let ((copy-action-node (car (dom-element-get-elements-by-tag-name item 'CopyToOutputDirectory))))
+    (if copy-action-node
+        (dom-node-text-content copy-action-node)
+      "")))
+
+
 (defun project-item-entry (compile-item-count item)
   "Returns a single item included in the project as a table entry."
-  (let ((name (dom-node-name item))
-        (file-name (include-attr-value item)))
-    (file-entry
-     file-name
-     (if (file-exists-p file-name) file-status-in file-status-missing)
-     (symbol-name name)
-     (if (eq name 'Compile) (number-to-string compile-item-count) ""))))
+  (let* ((node-name (dom-node-name item))
+         (file-name (include-attr-value item))
+         (file-index (if (eq node-name 'Compile) (number-to-string compile-item-count) ""))
+         (file-status (if (file-exists-p file-name) file-status-in file-status-missing))
+         (file-build-action (symbol-name node-name))
+         (file-copy-action (project-item-copy-action item)))
+    (file-entry file-status file-index file-name file-build-action file-copy-action)))
 
 
 (defun project-item-entries (project)
@@ -452,7 +452,7 @@ otherwise show all files in the project file directory."
       (if (not (or (file-directory-p file)
                    (assoc-string (file-name-nondirectory file) project-file-entries)
                    (string= "fsproj" (file-name-extension file))))
-          (push (file-entry (file-name-nondirectory file) file-status-out "" "") file-entries)))
+          (push (file-entry file-status-out "" (file-name-nondirectory file) "" "") file-entries)))
     (nreverse file-entries)))
 
 
