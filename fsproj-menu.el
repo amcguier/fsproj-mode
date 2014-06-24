@@ -216,15 +216,17 @@ See `Fsproj-menu-templates' for the list of supported templates."
     file-name))
 
 
-(defun move-child-node (item-group from-position from-file-name to-position to-file-name)
+(defun move-file-item (doc from-position from-file-name to-position to-file-name)
   "Move the file in the itemGroup from fromIndex to toIndex."
-  (let ((new-child (car (dom-element-get-elements-by-attribute-value item-group "Include" from-file-name)))
-        (ref-child (car (dom-element-get-elements-by-attribute-value item-group "Include" to-file-name))))
+  (let* ((root (dom-document-element doc))
+         (new-child (car (dom-element-get-elements-by-attribute-value root "Include" from-file-name)))
+         (item-group (dom-node-parent-node new-child))
+         (ref-child (car (dom-element-get-elements-by-attribute-value root "Include" to-file-name))))
     (cond ((< from-position to-position)
            (dom-node-insert-before item-group new-child (dom-node-next-sibling ref-child)))
           ((> from-position to-position)
            (dom-node-insert-before item-group new-child ref-child)))))
-
+ 
 
 (defun save-project-document (project-document project-file)
   "Save the project document to the project file."
@@ -249,7 +251,12 @@ See `Fsproj-menu-templates' for the list of supported templates."
 
 (defun entry-vector-file-position (entry-vector)
   "Returns the file position for the ENTRY-VECTOR."
-  (string-to-number (aref entry-vector 2)))
+  (string-to-number (aref entry-vector 1)))
+
+
+(defun entry-vector-file-build-action (entry-vector)
+  "Returns the file build action for the ENTRY-VECTOR."
+  (aref entry-vector 4))
 
 
 (defun entry-id (entry)
@@ -262,6 +269,11 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (cadr entry))
 
 
+(defun entry-vector-compile-file-p (entry-vector)
+  "Returns t if the ENTRY-VECTOR is for a compiled file."
+  (string= (entry-vector-file-build-action entry-vector) "Compile"))
+
+
 (defun entry-vector-included-file-p (entry-vector)
   "Returns t if the entry-vector is for a file included in the project."
   (not (string= (entry-vector-file-status entry-vector) file-status-out)))
@@ -272,6 +284,11 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (-first (lambda (entry)
             (eq file-position
                 (entry-vector-file-position (entry-vector entry)))) tabulated-list-entries))
+
+
+(defun tabulated-list-get-compile-file-count ()
+  "Returns the number of files with the Compile build action in the tabulated list."
+  (--count (entry-vector-compile-file-p (cadr it)) tabulated-list-entries))
 
 
 ;;------------------------------------------------------------------------------
@@ -309,20 +326,45 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (find-file-other-window (Fsproj-menu-get-file-for-visit)))
 
 
-(defun Fsproj-menu-move (to-position)
-  "Move the current line's file to another position within the project."
+(defun Fsproj-menu-move-1 (to-position)
+  "Move the currentl line's file to TO-POSITION within the project."
   (interactive "nMove file to: ")
+  (let* ((to-new-position (min to-position (tabulated-list-get-compile-file-count)))
+         (from-file-name (tabulated-list-get-id))
+         (entry-vector (tabulated-list-get-entry))
+         (item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
+         (from-position (entry-vector-file-position entry-vector))
+         (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-new-position))))
+    (unless (eq from-position to-new-position)
+      (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-new-position to-file-name)
+      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+      (refresh-buffer Fsproj-menu-project-file))))
+
+
+(defun Fsproj-menu-move ()
+  "Move the current line's file to another position within the project."
+  (interactive)
   (let ((from-file-name (tabulated-list-get-id))
         (entry-vector (tabulated-list-get-entry)))    
-    (if (entry-vector-included-file-p entry-vector)
-        (let ((item-group (file-item-group Fsproj-menu-file-item-tag-names Fsproj-menu-proj-doc))
-              (from-position (entry-vector-file-position entry-vector))
-              (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
-          (unless (eq from-position to-position)
-            (move-child-node item-group from-position from-file-name to-position to-file-name)
-            (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
-            (refresh-buffer Fsproj-menu-project-file)))
-      (message "Cannot move %s, add file to project first." from-file-name))))
+    (if (entry-vector-compile-file-p entry-vector)
+        (call-interactively 'Fsproj-menu-move-1)
+      (message "Cannot move %s, can only move files with the Compile build action." from-file-name))))
+
+
+;; (defun Fsproj-menu-move (to-position)
+;;   "Move the current line's file to another position within the project."
+;;   (interactive "nMove file to: ")
+;;   (let ((from-file-name (tabulated-list-get-id))
+;;         (entry-vector (tabulated-list-get-entry)))    
+;;     (if (entry-vector-included-file-p entry-vector)
+;;         (let ((item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
+;;               (from-position (entry-vector-file-position entry-vector))
+;;               (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
+;;           (unless (eq from-position to-position)
+;;             (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-position to-file-name)
+;;             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+;;             (refresh-buffer Fsproj-menu-project-file)))
+;;       (message "Cannot move %s, add file to project first." from-file-name))))
 
 
 (defun Fsproj-menu-refresh-buffer ()
@@ -356,7 +398,7 @@ otherwise show all files in the project file directory."
 
 
 (defun file-number-p (e1 e2)
-  "Returns non-nil is the first entry should sort before the second entry."
+  "Returns non-nil if the first entry should sort before the second entry."
   (let ((n1 (elt (cadr e1) 2))
         (n2 (elt (cadr e2) 2)))
     (cond ((and (string= "." n1) (string= "." n2))
@@ -378,81 +420,79 @@ otherwise show all files in the project file directory."
     (setq tabulated-list-format
           (vector
            '("S" 1 t)
-           '("T" 1 t)
            `("No." 3 file-number-p :right-align t)
-           `("File" ,name-width t)
-           `("Size" ,size-width tabulated-list-entry-size-> :right-align t))))
+           `("File Name" ,name-width t)
+           `("Size" ,size-width tabulated-list-entry-size-> :right-align t)
+           '("Build Action" 18 t)
+           '("Copy Action" 18 t))))
   (setq tabulated-list-sort-key (cons "No." nil))
   (setq tabulated-list-use-header-line Fsproj-menu-use-header-line)
   (if Fsproj-menu-proj-only
-      (let ((project-file-list (project-file-entries Fsproj-menu-proj-doc)))
+      (let ((project-file-list (project-item-entries Fsproj-menu-proj-doc)))
         (setq tabulated-list-entries project-file-list))
-    (let* ((project-file-list (project-file-entries Fsproj-menu-proj-doc))
+    (let* ((project-file-list (project-item-entries Fsproj-menu-proj-doc))
            (non-project-file-list
             (non-project-file-entries proj-file project-file-list)))
       (setq tabulated-list-entries (append non-project-file-list project-file-list))))
   (tabulated-list-init-header))
 
 
-(defun file-entry (file-name file-status file-type file-index)
+(defun file-entry (status index file-name build-action copy-action)
   "Returns an Fsproj-menu file entry for a file."
-  (let ((file-attrs (file-attributes file-name)))
-    (list file-name
-          (vector
-           ;; file status
-           file-status
-           ;; file type: compiled or non-compiled
-           file-type
-           ;; file index
-           file-index
-           ;; file name
-           (Fsproj-menu--pretty-name file-name)
-           ;; file size
-           (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs)))))))
+  (let* ((file-attrs (file-attributes file-name))
+         (size (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs))))
+         (display-name (Fsproj-menu--pretty-name file-name)))
+    (list file-name (vector status index display-name size build-action copy-action))))
 
 
-(defun include-attr-value (node)
+(defun include-attr-value (project-item)
   "Returns the value of the Include attribute."
-  (dom-node-value (car (dom-node-attributes node))))
+  (dom-node-value (car (dom-node-attributes project-item))))
 
 
-(defun project-file-entries (project)
-  "Returns a list of the files included in the project."
-  (let ((counter 0)
-        (entries))
-    (dolist (itemGroup (dom-document-get-elements-by-tag-name project 'ItemGroup))
-      (dolist (item (dom-node-child-nodes itemGroup))
+(defun project-item-copy-action (item)
+  "Returns the ITEM copy action."
+  (let ((copy-action-node (car (dom-element-get-elements-by-tag-name item 'CopyToOutputDirectory))))
+    (if copy-action-node
+        (dom-node-text-content copy-action-node)
+      "")))
+
+
+(defun project-item-entry (compile-item-count item)
+  "Returns a single item included in the project as a table entry."
+  (let* ((node-name (dom-node-name item))
+         (file-name (include-attr-value item))
+         (file-index (if (eq node-name 'Compile) (number-to-string compile-item-count) ""))
+         (file-status (if (file-exists-p file-name) file-status-in file-status-missing))
+         (file-build-action (symbol-name node-name))
+         (file-copy-action (project-item-copy-action item)))
+    (file-entry file-status file-index file-name file-build-action file-copy-action)))
+
+
+(defun project-item-entries (project)
+  "Returns a list of items included in the project as table entries."
+  (let ((compile-item-count 0)
+        (item-entries))
+    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))
+      (dolist (item (dom-node-child-nodes item-group))
         (let ((name (dom-node-name item)))
-          (cond ((eq name 'Compile)
-                 (setq counter (incf counter))
-                 (let ((file-name (include-attr-value item)))
-                   (push (file-entry
-                          file-name
-                          (if (file-exists-p file-name) file-status-in file-status-missing)
-                          "C"
-                          (number-to-string counter)) entries)))
-                ((eq name 'None)
-                 (setq counter (incf counter))
-                 (let ((file-name (include-attr-value item)))
-                   (push (file-entry
-                          file-name
-                          (if (file-exists-p file-name) file-status-in file-status-missing)
-                          "N"
-                          (number-to-string counter)) entries)))
-                ))))
-    (nreverse entries)))
+          (when (-contains? Fsproj-menu-item-tag-names name)
+            (if (eq name 'Compile)
+                (setq compile-item-count (incf compile-item-count)))
+            (push (project-item-entry compile-item-count item) item-entries)))))
+    (nreverse item-entries)))
 
 
 (defun non-project-file-entries (proj-file project-file-entries)
   "Returns the list of non-project files in the project directory."
-  (let* ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
-         entries)
+  (let ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
+        file-entries)
     (dolist (file dir-file-list)
       (if (not (or (file-directory-p file)
                    (assoc-string (file-name-nondirectory file) project-file-entries)
                    (string= "fsproj" (file-name-extension file))))
-          (push (file-entry (file-name-nondirectory file) file-status-out "." ".") entries)))
-    (nreverse entries)))
+          (push (file-entry file-status-out "" (file-name-nondirectory file) "" "") file-entries)))
+    (nreverse file-entries)))
 
 
 (defun tabulated-list-entry-size-> (entry1 entry2)
@@ -488,9 +528,11 @@ otherwise show all files in the project file directory."
     (concat "(" (file-name-nondirectory file) ") " Info-current-node))))
 
 
-(defvar Fsproj-menu-file-item-tag-names (let ((compile (intern "Compile"))
-                                              (none (intern "None")))
-                                          (list compile none))
+(defvar Fsproj-menu-item-tag-names
+  (list (intern "None")
+        (intern "Compile")
+        (intern "Content")
+        (intern "EmbeddedResource"))
   "The tag names used for project file items.")
 
 
@@ -862,10 +904,9 @@ The special value \"*\" matches all attribute values."
 ;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let* ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj"))))
-           (proj-entries (project-file-entries doc))
-           (non-proj-entries (non-project-file-entries "TestProject/TestProject.fsproj" proj-entries)))
-      (assert (<= 1 (length non-proj-entries))))))
+    (let ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
+      ;(move-file-item doc 1 "Foo.fsi" 4 "Program.fs")
+      )))
 
 
 ;;; fsproj-menu.el ends here
