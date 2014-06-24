@@ -368,7 +368,7 @@ This is called by `fsproj-menu' and others as a subroutine.
 If PROJ-ONLY is non-nil then show only files in project file,
 otherwise show all files in the project file directory."
   (let ((old-buffer (current-buffer))
-        (buffer (get-buffer-create "*Fsproj File List*")))
+        (buffer (get-buffer-create (file-name-nondirectory proj-file))))
     (with-current-buffer buffer
       (Fsproj-menu-mode)
       (setq Fsproj-menu-proj-only
