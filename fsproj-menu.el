@@ -25,8 +25,11 @@
 ;; The Fsproj Menu is used to view, add, remove and order files within
 ;; a Visual Studio F# project. The entry point is M-x fsproj-menu.
 
+;; Package-Requires: ((dash "2.6.0"))
+
 ;;; Code:
 
+(require 'dash)
 (require 'dom)
 (require 'sgml-mode)
 (require 'skeleton)
@@ -48,7 +51,7 @@
   :group 'Fsproj-menu)
 (put 'Fsproj-menu-file 'face-alias 'fsproj-menu-file)
 
-(defcustom Fsproj-menu-name-width 19
+(defcustom Fsproj-menu-name-width 30
   "Width of file name column in the Fsproj Menu."
   :type 'number
   :group 'Fsproj-menu)
@@ -69,6 +72,10 @@
   `fsproj-menu' and related commands.")
 (make-variable-buffer-local 'Fsproj-menu-proj-only)
 
+(defvar Fsproj-menu-project-file nil
+  "The current project file.")
+(make-variable-buffer-local 'Fsproj-menu-project-file)
+
 (defvar Fsproj-menu-proj-doc nil
   "The current project file dom document.")
 (make-variable-buffer-local 'Fsproj-menu-proj-doc)
@@ -84,12 +91,35 @@
 (defvar Info-current-node) ; from info.el
 
 
+(defvar file-status-in "+"
+  "The string used to represent a file included in the project.")
+
+
+(defvar file-status-out "-"
+  "The string used to represent a file not included in the project.")
+
+
+(defvar file-status-missing "!"
+  "The string used to represent a file included in the project but missing from the file system.")
+
+
 (defvar Fsproj-menu-mode-map
   (let ((map (make-sparse-keymap))
         (menu-map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    ;; TODO: define keys
+    (define-key map "e" 'Fsproj-menu-find-file)
+    (define-key map "f" 'Fsproj-menu-find-file)
+    (define-key map "\C-m" 'Fsproj-menu-find-file)    
+    (put 'Fsproj-menu-find-file :advertised-binding "\C-m")
+    (define-key map "g" 'Fsproj-menu-refresh-buffer)
+    (define-key map "o" 'Fsproj-menu-find-file-other-window)
     (define-key map "m" 'Fsproj-menu-move)
+    (define-key map [menu-bar immediate find-file-other-window]
+      '(menu-item "Find in Other Window" Fsproj-menu-find-file-other-window
+		  :help "Edit file at cursor in other window"))
+    (define-key map [menu-bar immediate find-file]
+      '(menu-item "Find This File" Fsproj-menu-find-file
+                  :help "Edit file at cursor"))
     ;; TODO: define bindings
     (bindings--define-key menu-map [quit]
       '(menu-item "Quit" quit-window
@@ -100,6 +130,7 @@
     position in the project file")) map)
   "Local keymap for `Fsproj-menu-mode' buffers.")
 
+
 (define-derived-mode Fsproj-menu-mode tabulated-list-mode "Fsproj Menu"
   "Major mode for Fsproj Menu buffers.
 The Fsproj Menu is invoked by the commands \\[fsproj-menu] and
@@ -108,11 +139,13 @@ of its contents.
 
 In Fsproj Menu mode, the following commands are defined:
 \\<Fsproj-menu-mode-map>
-\\[quit-window]    Remove the Fsproj Menu from the display.
-\\[Fsproj-menu-move]    Move the current line's file."
+Type \\[Fsproj-menu-find-file] to Find the current line's file.
+Type \\[Fsproj-menu-find-file-other-window] to find file in Other window.
+Type \\[quit-window]    Remove the Fsproj Menu from the display.
+Type \\[Fsproj-menu-move]    Move the current line's file."
   (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
 
-;; TODO: get directory name if in dired buffer
+
 (defun fsproj-start ()
   (or buffer-file-name dired-directory))
 
@@ -148,7 +181,7 @@ Menu."
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
-    (message "Commands: m, q to quit; ? for help.")))
+    (message "Commands: f, o, m, q to quit; ? for help.")))
 
 
 (defun fsproj-menu-other-window (&optional arg)
@@ -164,7 +197,7 @@ ARG, show only files that are in the project file."
   (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer-other-window
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg)))
-  (message "Commands: m, q to quit; ? for help."))
+  (message "Commands: f, o, m, q to quit; ? for help."))
 
 
 (defun create-fsproj-file (file-name template)
@@ -182,20 +215,166 @@ See `Fsproj-menu-templates' for the list of supported templates."
     (funcall (cdr (assoc template Fsproj-menu-templates)))
     file-name))
 
+
+(defun move-file-item (doc from-position from-file-name to-position to-file-name)
+  "Move the file in the itemGroup from fromIndex to toIndex."
+  (let* ((root (dom-document-element doc))
+         (new-child (car (dom-element-get-elements-by-attribute-value root "Include" from-file-name)))
+         (item-group (dom-node-parent-node new-child))
+         (ref-child (car (dom-element-get-elements-by-attribute-value root "Include" to-file-name))))
+    (cond ((< from-position to-position)
+           (dom-node-insert-before item-group new-child (dom-node-next-sibling ref-child)))
+          ((> from-position to-position)
+           (dom-node-insert-before item-group new-child ref-child)))))
+ 
+
+(defun save-project-document (project-document project-file)
+  "Save the project document to the project file."
+  (when (and project-file (file-writable-p project-file))
+    (with-temp-buffer
+      (insert (dom-to-string-doc project-document))
+      (write-region (point-min) (point-max) project-file))))
+
+
+(defun refresh-buffer (project-file)
+  "Refresh the Fsproj-file-list buffer."
+  (setq Fsproj-menu-proj-doc
+        (dom-make-document-from-xml (car (xml-parse-file project-file))))
+  (list-files--refresh project-file)
+  (tabulated-list-print))
+
+
+(defun entry-vector-file-status (entry-vector)
+  "Returns the file status for the ENTRY-VECTOR."
+  (aref entry-vector 0))
+
+
+(defun entry-vector-file-position (entry-vector)
+  "Returns the file position for the ENTRY-VECTOR."
+  (string-to-number (aref entry-vector 1)))
+
+
+(defun entry-vector-file-build-action (entry-vector)
+  "Returns the file build action for the ENTRY-VECTOR."
+  (aref entry-vector 4))
+
+
+(defun entry-id (entry)
+  "Returns the file name for the ENTRY."
+  (car entry))
+
+
+(defun entry-vector (entry)
+  "Returns the entry vector for the ENTRY."
+  (cadr entry))
+
+
+(defun entry-vector-compile-file-p (entry-vector)
+  "Returns t if the ENTRY-VECTOR is for a compiled file."
+  (string= (entry-vector-file-build-action entry-vector) "Compile"))
+
+
+(defun entry-vector-included-file-p (entry-vector)
+  "Returns t if the entry-vector is for a file included in the project."
+  (not (string= (entry-vector-file-status entry-vector) file-status-out)))
+
+
+(defun tabulated-list-get-entry-by-file-position (file-position)
+  "Returns the file name at the INDEX in the tabulated list"
+  (-first (lambda (entry)
+            (eq file-position
+                (entry-vector-file-position (entry-vector entry)))) tabulated-list-entries))
+
+
+(defun tabulated-list-get-compile-file-count ()
+  "Returns the number of files with the Compile build action in the tabulated list."
+  (--count (entry-vector-compile-file-p (cadr it)) tabulated-list-entries))
+
+
 ;;------------------------------------------------------------------------------
 ;; Commands
 ;;------------------------------------------------------------------------------
 
-(defun Fsproj-menu-move (toIndex)
-  "Move the current line's file to another position within the project."
+
+(defun Fsproj-menu-get-file-for-visit ()
+  "Get the current line's file name, with an error if file does not exist."
+  (interactive)
+  (let ((raw (tabulated-list-get-id))
+        file-name)
+    (if (null raw)
+        (error "No file on this line"))
+    (setq file-name (file-name-sans-versions raw t))
+    (if (file-exists-p file-name)
+        file-name
+      (if (file-symlink-p file-name)
+          (error "File is a symlink to a nonexistent target")
+        ;(error "File no longer exists; type `g' to update Fsproj-menu
+;buffer")
+        file-name
+        ))))
+
+
+(defun Fsproj-menu-find-file ()
+  "In Fsproj-menu, visit the file named on this line."
+  (interactive)
+  (find-file (Fsproj-menu-get-file-for-visit)))
+
+
+(defun Fsproj-menu-find-file-other-window ()
+  "In Fsproj-menu, visit this file in another window."
+  (interactive)
+  (find-file-other-window (Fsproj-menu-get-file-for-visit)))
+
+
+(defun Fsproj-menu-move-1 (to-position)
+  "Move the currentl line's file to TO-POSITION within the project."
   (interactive "nMove file to: ")
-  ;; TODO: check file is included in the project
-  (let* ((file (tabulated-list-get-id))
-         (entry (tabulated-list-get-entry))
-         (fromIndex (string-to-number (aref entry 2))))
-    (message "MOVE from %d to %d" fromIndex toIndex)))
+  (let* ((to-new-position (min to-position (tabulated-list-get-compile-file-count)))
+         (from-file-name (tabulated-list-get-id))
+         (entry-vector (tabulated-list-get-entry))
+         (item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
+         (from-position (entry-vector-file-position entry-vector))
+         (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-new-position))))
+    (unless (eq from-position to-new-position)
+      (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-new-position to-file-name)
+      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+      (refresh-buffer Fsproj-menu-project-file))))
+
+
+(defun Fsproj-menu-move ()
+  "Move the current line's file to another position within the project."
+  (interactive)
+  (let ((from-file-name (tabulated-list-get-id))
+        (entry-vector (tabulated-list-get-entry)))    
+    (if (entry-vector-compile-file-p entry-vector)
+        (call-interactively 'Fsproj-menu-move-1)
+      (message "Cannot move %s, can only move files with the Compile build action." from-file-name))))
+
+
+;; (defun Fsproj-menu-move (to-position)
+;;   "Move the current line's file to another position within the project."
+;;   (interactive "nMove file to: ")
+;;   (let ((from-file-name (tabulated-list-get-id))
+;;         (entry-vector (tabulated-list-get-entry)))    
+;;     (if (entry-vector-included-file-p entry-vector)
+;;         (let ((item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
+;;               (from-position (entry-vector-file-position entry-vector))
+;;               (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
+;;           (unless (eq from-position to-position)
+;;             (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-position to-file-name)
+;;             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+;;             (refresh-buffer Fsproj-menu-project-file)))
+;;       (message "Cannot move %s, add file to project first." from-file-name))))
+
+
+(defun Fsproj-menu-refresh-buffer ()
+  "Refresh the contents of the current Fsproj-menu buffer."
+  (interactive)
+  (refresh-buffer Fsproj-menu-project-file))
+
 
 ;;------------------------------------------------------------------------------
+
 
 ;;;###autoload
 (defun list-files-noselect (proj-file &optional proj-only)
@@ -210,6 +389,7 @@ otherwise show all files in the project file directory."
       (Fsproj-menu-mode)
       (setq Fsproj-menu-proj-only
             (and proj-only (>= (prefix-numeric-value proj-only) 0)))
+      (setq Fsproj-menu-project-file proj-file)
       (setq Fsproj-menu-proj-doc
             (dom-make-document-from-xml (car (xml-parse-file proj-file))))
       (list-files--refresh proj-file)
@@ -218,7 +398,7 @@ otherwise show all files in the project file directory."
 
 
 (defun file-number-p (e1 e2)
-  "Returns non-nil is the first entry should sort before the second entry."
+  "Returns non-nil if the first entry should sort before the second entry."
   (let ((n1 (elt (cadr e1) 2))
         (n2 (elt (cadr e2) 2)))
     (cond ((and (string= "." n1) (string= "." n2))
@@ -240,138 +420,91 @@ otherwise show all files in the project file directory."
     (setq tabulated-list-format
           (vector
            '("S" 1 t)
-           '("T" 1 t)
            `("No." 3 file-number-p :right-align t)
-           `("File" ,name-width t)
-           `("Size" ,size-width tabulated-list-entry-size-> :right-align t))))
+           `("File Name" ,name-width t)
+           `("Size" ,size-width tabulated-list-entry-size-> :right-align t)
+           '("Build Action" 18 t)
+           '("Copy Action" 18 t))))
   (setq tabulated-list-sort-key (cons "No." nil))
   (setq tabulated-list-use-header-line Fsproj-menu-use-header-line)
   (if Fsproj-menu-proj-only
-      (let ((project-file-list (project-file-entries Fsproj-menu-proj-doc)))
+      (let ((project-file-list (project-item-entries Fsproj-menu-proj-doc)))
         (setq tabulated-list-entries project-file-list))
-    (let* ((project-file-list (project-file-entries Fsproj-menu-proj-doc))
+    (let* ((project-file-list (project-item-entries Fsproj-menu-proj-doc))
            (non-project-file-list
             (non-project-file-entries proj-file project-file-list)))
       (setq tabulated-list-entries (append non-project-file-list project-file-list))))
   (tabulated-list-init-header))
 
 
-(defun file-entry (file-name file-status file-type file-index)
+(defun file-entry (status index file-name build-action copy-action)
   "Returns an Fsproj-menu file entry for a file."
-  (let ((file-attrs (file-attributes file-name)))
-    (list file-name
-          (vector
-           ;; file status
-           file-status
-           ;; file type: compiled or non-compiled
-           file-type
-           ;; file index
-           file-index
-           ;; file name
-           (Fsproj-menu--pretty-name file-name)
-           ;; file size
-           (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs)))))))
+  (let* ((file-attrs (file-attributes file-name))
+         (size (if (eq nil file-attrs) "" (number-to-string (nth 7 file-attrs))))
+         (display-name (Fsproj-menu--pretty-name file-name)))
+    (list file-name (vector status index display-name size build-action copy-action))))
 
 
-(defun include-attr-value (node)
+(defun include-attr-value (project-item)
   "Returns the value of the Include attribute."
-  (dom-node-value (car (dom-node-attributes node))))
+  (dom-node-value (car (dom-node-attributes project-item))))
 
 
-(defun project-file-entries (project)
-  "Returns a list of the files included in the project."
-  (let ((counter 0)
-        (entries))
-    (dolist (itemGroup (dom-document-get-elements-by-tag-name project 'ItemGroup))
-      (dolist (item (dom-node-child-nodes itemGroup))
+(defun project-item-copy-action (item)
+  "Returns the ITEM copy action."
+  (let ((copy-action-node (car (dom-element-get-elements-by-tag-name item 'CopyToOutputDirectory))))
+    (if copy-action-node
+        (dom-node-text-content copy-action-node)
+      "")))
+
+
+(defun project-item-entry (compile-item-count item)
+  "Returns a single item included in the project as a table entry."
+  (let* ((node-name (dom-node-name item))
+         (file-name (include-attr-value item))
+         (file-index (if (eq node-name 'Compile) (number-to-string compile-item-count) ""))
+         (file-status (if (file-exists-p file-name) file-status-in file-status-missing))
+         (file-build-action (symbol-name node-name))
+         (file-copy-action (project-item-copy-action item)))
+    (file-entry file-status file-index file-name file-build-action file-copy-action)))
+
+
+(defun project-item-entries (project)
+  "Returns a list of items included in the project as table entries."
+  (let ((compile-item-count 0)
+        (item-entries))
+    (dolist (item-group (dom-document-get-elements-by-tag-name project 'ItemGroup))
+      (dolist (item (dom-node-child-nodes item-group))
         (let ((name (dom-node-name item)))
-          (cond ((eq name 'Compile)
-                 (setq counter (incf counter))
-                 (let ((file-name (include-attr-value item)))
-                   (push (file-entry
-                          file-name
-                          (if (file-exists-p file-name) "+" "!")
-                          "C"
-                          (number-to-string counter)) entries)))
-                ((eq name 'None)
-                 (setq counter (incf counter))
-                 (let ((file-name (include-attr-value item)))
-                   (push (file-entry
-                          file-name
-                          (if (file-exists-p file-name) "+" "!")
-                          "N"
-                          (number-to-string counter)) entries)))
-                ))))
-    (nreverse entries)))
-
-
-(defun my-filter (condp lst)
-  (delq nil
-        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
+          (when (-contains? Fsproj-menu-item-tag-names name)
+            (if (eq name 'Compile)
+                (setq compile-item-count (incf compile-item-count)))
+            (push (project-item-entry compile-item-count item) item-entries)))))
+    (nreverse item-entries)))
 
 
 (defun non-project-file-entries (proj-file project-file-entries)
   "Returns the list of non-project files in the project directory."
-  (let* ((dir-file-list
-          (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
-         (non-project-file-list
-          (my-filter (lambda (file)
-                       (and
-                        (not (file-directory-p file))
-                        (not (assq file project-file-entries))
-                        (not (string= "fsproj" (file-name-extension file)))
-                        )) dir-file-list))
-         entries)
-    (dolist (file non-project-file-list)
-      (push (file-entry (file-name-nondirectory file) "-" "." ".") entries))
-    (nreverse entries)))
+  (let ((dir-file-list (all-files-under-dir (file-name-directory proj-file) nil nil "^\\#\\|\\~$"))
+        file-entries)
+    (dolist (file dir-file-list)
+      (if (not (or (file-directory-p file)
+                   (assoc-string (file-name-nondirectory file) project-file-entries)
+                   (string= "fsproj" (file-name-extension file))))
+          (push (file-entry file-status-out "" (file-name-nondirectory file) "" "") file-entries)))
+    (nreverse file-entries)))
 
-
-;;;###autoload
-(defun all-files-under-dir
-  (dir &optional include-regexp  include-regexp-absolute-path-p exclude-regex exclude-regex-absolute-p)
-  "Return all files matched `include-regexp' under directory `dir'.
-if `include-regexp' is nil ,return all.
-when `include-regexp-absolute-path-p' is nil or omited ,filename is used to match `include-regexp'
-when `include-regexp-absolute-path-p' is t then full file path is used to match `include-regexp'
-when `exclude-regexp-absolute-path-p' is nil or omited ,filename is used to match `exclude-regexp'
-when `exclude-regexp-absolute-path-p' is t then full file path is used to match `exclude-regexp'
-"
-  (let((files (list dir))  matched-files head)
-    (while (> (length files) 0)
-      (setq head (pop files))
-      (when (file-readable-p head)
-        (if (and (eq dir head) (file-directory-p head))
-            (dolist (sub (directory-files head))
-              (when  (not (string-match "^\\.$\\|^\\.\\.$" sub))
-                (when (or (not exclude-regex)
-                          (and exclude-regex (not exclude-regex-absolute-p))
-                          (and exclude-regex exclude-regex-absolute-p  (not (string-match  exclude-regex  (expand-file-name sub head)))))
-                  (setq files (append (list (expand-file-name sub head)) files)))))
-          (if include-regexp
-              (if (string-match include-regexp (if include-regexp-absolute-path-p head (file-name-nondirectory head)))
-                  (if exclude-regex
-                      (if (not (string-match exclude-regex (if exclude-regex-absolute-p head (file-name-nondirectory head))))
-                          (add-to-list 'matched-files head))
-                    (add-to-list 'matched-files head)))
-            (if exclude-regex
-                (if (not (string-match exclude-regex (if exclude-regex-absolute-p head (file-name-nondirectory head))))
-                    (add-to-list 'matched-files head))
-              (add-to-list 'matched-files head))))))
-    matched-files))
-
-
-(defun compiled-file-p (compiled-file-list afile)
-  (member (file-name-nondirectory afile) compiled-file-list))
 
 (defun tabulated-list-entry-size-> (entry1 entry2)
   (> (string-to-number (aref (cadr entry1) 4))
      (string-to-number (aref (cadr entry2) 4))))
 
+
 (defun Fsproj-menu--pretty-name (name)
   (propertize name
               'font-lock-face 'buffer-menu-buffer
               'mouse-face 'highlight))
+
 
 (defun Fsproj-menu--pretty-file-name (file)
   (cond (file
@@ -393,6 +526,78 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
    ((not (stringp file)) "") ; Avoid errors
    (t
     (concat "(" (file-name-nondirectory file) ") " Info-current-node))))
+
+
+(defvar Fsproj-menu-item-tag-names
+  (list (intern "None")
+        (intern "Compile")
+        (intern "Content")
+        (intern "EmbeddedResource"))
+  "The tag names used for project file items.")
+
+
+(defun file-item-group-p (file-item-tag-names itemGroup)
+  "Returns t if the item group is the file item group otherwise nil"
+  (-any?
+   (lambda (child) (-contains? file-item-tag-names (dom-node-name child)))
+   (dom-node-child-nodes itemGroup)))
+
+
+(defun file-item-group (file-item-tag-names project-document)
+  "If it exists then return the project ItemGroup containing the
+project files otherwise return nil."
+  (-first
+   (lambda (itemGroup) (file-item-group-p file-item-tag-names itemGroup))
+   (dom-document-get-elements-by-tag-name project-document 'ItemGroup)))
+
+
+;;------------------------------------------------------------------------------
+;; Misc.
+;;------------------------------------------------------------------------------
+
+
+;;;###autoload
+(defun all-files-under-dir
+  (dir &optional include-regexp  include-regexp-absolute-path-p exclude-regex exclude-regex-absolute-p)
+  "Return all files matched `include-regexp' under directory `dir'.
+if `include-regexp' is nil ,return all.
+when `include-regexp-absolute-path-p' is nil or omited ,filename is used to match `include-regexp'
+when `include-regexp-absolute-path-p' is t then full file path is used to match `include-regexp'
+when `exclude-regexp-absolute-path-p' is nil or omited ,filename is used to match `exclude-regexp'
+when `exclude-regexp-absolute-path-p' is t then full file path is used to match `exclude-regexp'
+"
+  (let((files (list dir))  matched-files head)
+    (while (> (length files) 0)
+      (setq head (pop files))
+      (when (file-readable-p head)
+        (if (and (eq dir head) (file-directory-p head))
+            (dolist (sub (directory-files head))
+              (when  (not (string-match "^\\.$\\|^\\.\\.$" sub))
+                (when (or (not exclude-regex)
+                          (and exclude-regex (not exclude-regex-absolute-p))
+                          (and exclude-regex exclude-regex-absolute-p
+                               (not (string-match  exclude-regex  (expand-file-name sub head)))))
+                  (setq files (append (list (expand-file-name sub head)) files)))))
+          (if include-regexp
+              (if (string-match include-regexp
+                                (if include-regexp-absolute-path-p head (file-name-nondirectory head)))
+                  (if exclude-regex
+                      (if (not
+                           (string-match exclude-regex
+                                         (if exclude-regex-absolute-p head (file-name-nondirectory head))))
+                          (add-to-list 'matched-files head))
+                    (add-to-list 'matched-files head)))
+            (if exclude-regex
+                (if (not (string-match exclude-regex
+                                       (if exclude-regex-absolute-p head (file-name-nondirectory head))))
+                    (add-to-list 'matched-files head))
+              (add-to-list 'matched-files head))))))
+    matched-files))
+
+
+(defun my-filter (condp lst)
+  (delq nil
+        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
 
 
 ;;------------------------------------------------------------------------------
@@ -544,6 +749,92 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 
 
 ;;------------------------------------------------------------------------------
+;; DOM extensions
+;;------------------------------------------------------------------------------
+
+
+(defun dom-to-string-doc (doc)
+  "Convert a DOM document to an XML string."
+  (let ((result "<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+        (root (dom-document-element doc)))
+    (setq result (concat result (dom-to-string-node root)))))
+
+
+(defun dom-to-string-nodes (nodes)
+  "Convert a DOM node list to an XML string."
+  (let ((result))
+    (dolist (node nodes result)
+      (setq result (concat result (dom-to-string-node node))))))
+
+
+(defun dom-to-string-node (node)
+  "Convert a DOM node to an XML string."
+  (let ((node-name (symbol-name (dom-node-name node)))
+        (child-nodes (dom-node-child-nodes node)))
+    (if (dom-text-p node)
+        (dom-node-value node)
+      (concat
+       "<" node-name (dom-to-string-attributes node) ">"
+       (dom-to-string-nodes child-nodes)
+       "</" node-name ">"))))
+
+
+(defun dom-to-string-attributes (node)
+  "Convert an attribute list to an XML attributes string."
+  (let ((result)
+        (attributes (dom-node-attributes node)))
+    (dolist (attribute attributes result)
+      (setq result (concat result (dom-to-string-attribute attribute))))))
+
+
+(defun dom-to-string-attribute (attribute)
+  "Convert an attribute to an XML attribute string."
+  (let ((name (symbol-name (dom-node-name attribute)))
+        (value (dom-node-value attribute)))
+    (concat " " name "=\"" value "\"")))
+
+
+(defun dom-document-get-elements-by-attribute-value (doc attribute-name attribute-value)
+  "Return a list of elements with an attribute with the given ATTRIBUTE-NAME and ATTRIBUTE-VALUE.
+The special value \"*\" matches all attribute values."
+  (dom-element-get-elements-by-attribute-value-1 (dom-document-element doc) attribute-name attribute-value))
+
+
+(defun dom-element-get-elements-by-attribute-value (element attribute-name attribute-value)
+  "Return a list of descendant elements of ELEMENT with the given ATTRIBUTE-NAME and ATTRIBUTE-VALUE.
+The special value \"*\" matches all attribute values."
+  (dom-element-get-elements-by-attribute-value-1 (dom-element-first-child element) attribute-name attribute-value))
+
+
+(defun dom-element-get-elements-by-attribute-value-1 (element attribute-name attribute-value)
+  "Return a list of elements with the given ATTRIBUTE-NAME and ATTRIBUTE-VALUE.
+The elements are ELEMENT, its siblings and their descendants. This is used by
+`dom-document-get-elements-by-attribute-value' and `dom-element-get-elements-by-attribute-value'."
+  (let (stack result)
+    (while element
+      (when (dom-element-attribute-value-p element attribute-name attribute-value)
+        (setq result (cons element result)))
+      (setq element
+            (cond ((dom-node-first-child element)
+                   (when (dom-node-next-sibling element)
+                     (push (dom-node-next-sibling element) stack))
+                   (dom-node-first-child element))
+                  ((dom-node-next-sibling element))
+                  (t (pop stack)))))
+    (nreverse result)))
+
+
+(defun dom-element-attribute-value-p (element attribute-name attribute-value)
+  "Returns t if ELEMENT has an attribute named ATTRIBUTE-NAME with a value ATTRIBUTE-VALUE.
+The special value \"*\" matches all attribute values."
+  (-any? (lambda (attribute)
+           (and (string= (dom-node-name attribute) attribute-name)
+                (or (string= attribute-value "*")
+                    (string= (dom-node-value attribute) attribute-value))))
+         (dom-node-attributes element)))
+
+
+;;------------------------------------------------------------------------------
 ;; Project - stolen from fsharp-mode
 ;;------------------------------------------------------------------------------
 
@@ -576,14 +867,46 @@ when `exclude-regexp-absolute-path-p' is t then full file path is used to match 
 ;;------------------------------------------------------------------------------
 
 
-;; (eval-when-compile
-;;   (when (file-readable-p "sample.fsproj")
-;;     (let* ((data (car (xml-parse-file "sample.fsproj")))
-;;            (doc (dom-make-document-from-xml data)))
-;;       ;; Test getting files included in project.
-;;       (let ((entries (project-file-entries doc)))
-;;         (assert (eq 4 (length entries)))
-;;         ))))
+;; Test: dom-to-string
+(eval-when-compile
+  (when (file-readable-p "TestProject/TestProject.fsproj")
+    (let* ((doc1 (dom-make-document-from-xml
+                  (car (xml-parse-file "TestProject/TestProject.fsproj"))))
+           (root1 (dom-document-element doc1)))
+      (let* ((xml (dom-to-string-doc doc1))
+             (doc2 (with-temp-buffer
+                     (insert xml)
+                     (dom-make-document-from-xml
+                      (car (xml-parse-region (point-min) (point-max))))))
+             (root2 (dom-document-element doc2)))
+        (assert (not (eq root1 root2)))
+        (assert (not (eq
+                      (dom-node-attributes root1)
+                      (dom-node-attributes root2))))
+        (assert (eq
+                 (dom-node-name (car (dom-node-attributes root1)))
+                 (dom-node-name (car (dom-node-attributes root2)))))
+        (assert (not (eq
+                      (dom-node-value (car (dom-node-attributes root1)))
+                      (dom-node-value (car (dom-node-attributes root2))))))
+        (assert (equal
+                 (dom-node-value (car (dom-node-attributes root1)))
+                 (dom-node-value (car (dom-node-attributes root2)))))
+        (assert (equal
+                 (dom-node-name (dom-node-last-child root1))
+                 (dom-node-name (dom-node-last-child root2))))
+        (assert (equal
+                 (dom-node-value (dom-node-last-child root1))
+                 (dom-node-value (dom-node-last-child root2))))
+        ))))
+
+
+;; Test: non-project-file-entries
+(eval-when-compile
+  (when (file-readable-p "TestProject/TestProject.fsproj")
+    (let ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
+      ;(move-file-item doc 1 "Foo.fsi" 4 "Program.fs")
+      )))
 
 
 ;;; fsproj-menu.el ends here
