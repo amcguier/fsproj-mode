@@ -329,7 +329,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
 (defun Fsproj-menu-move-1 (to-position)
   "Move the currentl line's file to TO-POSITION within the project."
   (interactive "nMove file to: ")
-  (let* ((to-new-position (min to-position (tabulated-list-get-compile-file-count)))
+  (let* ((to-new-position (max (min to-position (tabulated-list-get-compile-file-count)) 1))
          (from-file-name (tabulated-list-get-id))
          (entry-vector (tabulated-list-get-entry))
          (item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
@@ -351,22 +351,6 @@ See `Fsproj-menu-templates' for the list of supported templates."
       (message "Cannot move %s, can only move files with the Compile build action." from-file-name))))
 
 
-;; (defun Fsproj-menu-move (to-position)
-;;   "Move the current line's file to another position within the project."
-;;   (interactive "nMove file to: ")
-;;   (let ((from-file-name (tabulated-list-get-id))
-;;         (entry-vector (tabulated-list-get-entry)))    
-;;     (if (entry-vector-included-file-p entry-vector)
-;;         (let ((item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
-;;               (from-position (entry-vector-file-position entry-vector))
-;;               (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
-;;           (unless (eq from-position to-position)
-;;             (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-position to-file-name)
-;;             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
-;;             (refresh-buffer Fsproj-menu-project-file)))
-;;       (message "Cannot move %s, add file to project first." from-file-name))))
-
-
 (defun Fsproj-menu-refresh-buffer ()
   "Refresh the contents of the current Fsproj-menu buffer."
   (interactive)
@@ -384,7 +368,7 @@ This is called by `fsproj-menu' and others as a subroutine.
 If PROJ-ONLY is non-nil then show only files in project file,
 otherwise show all files in the project file directory."
   (let ((old-buffer (current-buffer))
-        (buffer (get-buffer-create "*Fsproj File List*")))
+        (buffer (get-buffer-create (file-name-nondirectory proj-file))))
     (with-current-buffer buffer
       (Fsproj-menu-mode)
       (setq Fsproj-menu-proj-only
