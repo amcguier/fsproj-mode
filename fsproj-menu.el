@@ -329,7 +329,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
 (defun Fsproj-menu-move-1 (to-position)
   "Move the currentl line's file to TO-POSITION within the project."
   (interactive "nMove file to: ")
-  (let* ((to-new-position (min to-position (tabulated-list-get-compile-file-count)))
+  (let* ((to-new-position (max (min to-position (tabulated-list-get-compile-file-count)) 1))
          (from-file-name (tabulated-list-get-id))
          (entry-vector (tabulated-list-get-entry))
          (item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
