@@ -351,22 +351,6 @@ See `Fsproj-menu-templates' for the list of supported templates."
       (message "Cannot move %s, can only move files with the Compile build action." from-file-name))))
 
 
-;; (defun Fsproj-menu-move (to-position)
-;;   "Move the current line's file to another position within the project."
-;;   (interactive "nMove file to: ")
-;;   (let ((from-file-name (tabulated-list-get-id))
-;;         (entry-vector (tabulated-list-get-entry)))    
-;;     (if (entry-vector-included-file-p entry-vector)
-;;         (let ((item-group (file-item-group Fsproj-menu-item-tag-names Fsproj-menu-proj-doc))
-;;               (from-position (entry-vector-file-position entry-vector))
-;;               (to-file-name (entry-id (tabulated-list-get-entry-by-file-position to-position))))
-;;           (unless (eq from-position to-position)
-;;             (move-file-item Fsproj-menu-proj-doc from-position from-file-name to-position to-file-name)
-;;             (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
-;;             (refresh-buffer Fsproj-menu-project-file)))
-;;       (message "Cannot move %s, add file to project first." from-file-name))))
-
-
 (defun Fsproj-menu-refresh-buffer ()
   "Refresh the contents of the current Fsproj-menu buffer."
   (interactive)
