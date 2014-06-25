@@ -26,8 +26,8 @@ Status | Description
 
 ### Keys
 
-Keys | Action
----- | ------
+Key | Action
+--- | ------
 RET | Open the current file in this window.
 e | Open the current file in this window.
 f | Open the current file in this window.
