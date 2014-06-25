@@ -4,6 +4,8 @@ An Emacs major-mode for creating, viewing and editing F# project files.
 
 ![alt tag](https://raw.github.com/simontcousins/fsproj-mode/master/screen-shot.png)
 
+### Columns
+
 Column | Description
 ------ | -----------
 S | The Status of the file (see Status table below).
@@ -14,7 +16,7 @@ Build Action | How the file is handled by the build.
 Copy Action | How the file is copied by the build.
 
 
-## File Status
+### File Status
 
 Status | Description
 ------ | -----------
@@ -22,7 +24,7 @@ Status | Description
 + | The file is on the disk and in the project.
 ! | The file is not on the disk and in the project.
 
-## Keys
+### Keys
 
 Keys | Action
 ---- | ------
