@@ -5,8 +5,6 @@ An Emacs major-mode for creating, viewing and editing F# project files.
 
 ![alt tag](https://raw.github.com/simontcousins/fsproj-mode/master/screen-shot.png)
 
-Where:
-
 Column | Description
 ------ | -----------
 S | The Status column (see Status table below).
@@ -16,12 +14,15 @@ Size | The size of the file in bytes.
 Build Action | How the file is handled by the build.
 Copy Action | How the file is copied by the build.
 
+The status of each file is represented by these symbols in the first column of the project buffer:
 
 Status | Description
 ------ | -----------
 - | The file is on the disk and not in the project.
 + | The file is on the disk and in the project.
 ! | The file is not on the disk and in the project.
+
+These keys have the following actions:
 
 Keys | Action
 ---- | ------
