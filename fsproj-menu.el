@@ -139,10 +139,14 @@ of its contents.
 
 In Fsproj Menu mode, the following commands are defined:
 \\<Fsproj-menu-mode-map>
-Type \\[Fsproj-menu-find-file] to Find the current line's file.
-Type \\[Fsproj-menu-find-file-other-window] to find file in Other window.
-Type \\[quit-window]    Remove the Fsproj Menu from the display.
-Type \\[Fsproj-menu-move]    Move the current line's file."
+Type \\[Fsproj-menu-find-file]\tOpen the current file in this window.
+Type e\tOpen the current file in this window.
+Type f\tOpen the current file in this window.
+Type \\[Fsproj-menu-refresh-buffer]\tRefresh the project buffer.
+Type \\[Fsproj-menu-move]\tMove the current file within the project.
+Type \\[Fsproj-menu-find-file-other-window]\tOpen the current file in another window.
+Type \\[quit-window]\tQuit the project buffer.
+"
   (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
 
 
