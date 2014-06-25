@@ -8,7 +8,7 @@ An Emacs major-mode for creating, viewing and editing F# project files.
 
 Column | Description
 ------ | -----------
-S | The Status of the file (see Status table below).
+S | The status of the file (see File Status).
 No. | The position of the file within the project.
 File Name | The name of the file.
 Size | The size of the file in bytes.
