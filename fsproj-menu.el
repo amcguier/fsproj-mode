@@ -107,27 +107,45 @@
   (let ((map (make-sparse-keymap))
         (menu-map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    (define-key map "e" 'Fsproj-menu-find-file)
-    (define-key map "f" 'Fsproj-menu-find-file)
     (define-key map "\C-m" 'Fsproj-menu-find-file)    
     (put 'Fsproj-menu-find-file :advertised-binding "\C-m")
+    (define-key map "d" 'Fsproj-menu-delete-file)
+    (define-key map "e" 'Fsproj-menu-find-file)
+    (define-key map "f" 'Fsproj-menu-find-file)
     (define-key map "g" 'Fsproj-menu-refresh-buffer)
-    (define-key map "o" 'Fsproj-menu-find-file-other-window)
     (define-key map "m" 'Fsproj-menu-move)
-    (define-key map [menu-bar immediate find-file-other-window]
+    (define-key map "n" 'Fsproj-menu-new-file)
+    (define-key map "o" 'Fsproj-menu-find-file-other-window)
+    (define-key map "+" 'Fsproj-menu-add-file)
+    (define-key map "-" 'Fsproj-menu-remove-file)
+    (bindings--define-key menu-map [menu-bar immediate find-file-other-window]
       '(menu-item "Find in Other Window" Fsproj-menu-find-file-other-window
 		  :help "Edit file at cursor in other window"))
-    (define-key map [menu-bar immediate find-file]
-      '(menu-item "Find This File" Fsproj-menu-find-file
+    (bindings--define-key menu-map [new]
+      '(menu-item "New" Fsproj-menu-new-file
+                  :help "Add new file to project"))
+    (bindings--define-key menu-map [add]
+      '(menu-item "Add" Fsproj-menu-add-file
+                  :help "Add file at cursor to project"))
+    (bindings--define-key menu-map [remove]
+      '(menu-item "Remove" Fsproj-menu-remove-file
+                  :help "Remove file at cursor from project"))
+    (bindings--define-key menu-map [delete]
+      '(menu-item "Delete" Fsproj-menu-delete-file
+                  :help "Delete file at cursor"))
+    (bindings--define-key menu-map [menu-bar immediate find-file]
+      '(menu-item "Open" Fsproj-menu-find-file
                   :help "Edit file at cursor"))
-    ;; TODO: define bindings
+    (bindings--define-key menu-map [move]
+      '(menu-item "Move" Fsproj-menu-move
+                  :help "Move file at cursor to another position within the project"))
+    (bindings--define-key menu-map [refresh]
+      '(menu-item "Refresh" Fsproj-menu-refresh-buffer
+                  :help "Refresh the project buffer"))
     (bindings--define-key menu-map [quit]
       '(menu-item "Quit" quit-window
                   :help "Remove the Fsproj Menu from the display"))
-    (bindings--define-key menu-map [mv]
-      '(menu-item "Move" Fsproj-menu-move
-                  :help "Move the file on this line to another
-    position in the project file")) map)
+    map)
   "Local keymap for `Fsproj-menu-mode' buffers.")
 
 
@@ -139,12 +157,16 @@ of its contents.
 
 In Fsproj Menu mode, the following commands are defined:
 \\<Fsproj-menu-mode-map>
-Type \\[Fsproj-menu-find-file]\tOpen the current file in this window.
-Type e\tOpen the current file in this window.
-Type f\tOpen the current file in this window.
+Type \\[Fsproj-menu-new-file]\tAdd a new file to the project.
+Type \\[Fsproj-menu-add-file]\tAdd file at cursor to the project.
+Type \\[Fsproj-menu-remove-file]\tRemove file at cursor from the project.
+Type \\[Fsproj-menu-delete-file]\tDelete file at cursor. 
+Type \\[Fsproj-menu-find-file]\tOpen file at cursor in this window.
+Type e\tOpen file at cursor in this window.
+Type f\tOpen file at cursor in this window.
 Type \\[Fsproj-menu-refresh-buffer]\tRefresh the project buffer.
-Type \\[Fsproj-menu-move]\tMove the current file within the project.
-Type \\[Fsproj-menu-find-file-other-window]\tOpen the current file in another window.
+Type \\[Fsproj-menu-move]\tMove file at cursor to another position within the project.
+Type \\[Fsproj-menu-find-file-other-window]\tOpen file at cursor in another window.
 Type \\[quit-window]\tQuit the project buffer.
 "
   (add-hook 'tabulated-list-revert-hook 'list-files--refresh nil t))
@@ -185,7 +207,7 @@ Menu."
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
-    (message "Commands: f, o, m, q to quit; ? for help.")))
+    (message "Commands: RET, a, e, f, m, n, o, +, -, q to quit; ? for help.")))
 
 
 (defun fsproj-menu-other-window (&optional arg)
@@ -201,7 +223,7 @@ ARG, show only files that are in the project file."
   (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer-other-window
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg)))
-  (message "Commands: f, o, m, q to quit; ? for help."))
+  (message "Commands: RET, a, e, f, m, n, o, +, -, q to quit; ? for help."))
 
 
 (defun create-fsproj-file (file-name template)
@@ -231,6 +253,30 @@ See `Fsproj-menu-templates' for the list of supported templates."
           ((> from-position to-position)
            (dom-node-insert-before item-group new-child ref-child)))))
  
+
+;; TODO: default-build-action, create-file-item,
+;; build-action-item-group, create-item-group
+
+(defun add-file-item (doc file-name)
+  "Add the file to the DOC."
+  (let* ((root (dom-document-element doc))
+         (build-action (default-build-action file-name))
+         (item (create-file-item file-name build-action))
+         (item-group (build-action-item-group doc build-action)))
+    (if (item-group)
+        (dom-node-insert-before item-group item)
+      (let (item-group (create-item-group))
+        (dom-node-insert-before item-group item)
+        (dom-node-insert-before root item-group)))))
+
+
+(defun remove-file-item (doc file-name)
+  "Remove the file from the DOC."
+  (let* ((root (dom-document-element doc))
+         (old-child (car (dom-element-get-elements-by-attribute-value root "Include" file-name)))
+         (item-group (dom-node-parent-node child)))
+    (dom-node-remove-child item-group old-child)))
+
 
 (defun save-project-document (project-document project-file)
   "Save the project document to the project file."
@@ -295,9 +341,76 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (--count (entry-vector-compile-file-p (cadr it)) tabulated-list-entries))
 
 
+(defun prompt-for-new-file-name-at-location (ask-mess default-location)
+  "Ask for the name of the file to create.
+Check to see if one exists already, and if so, ask for another name.
+Asks the question ASK-MESS, and defaults to the using the location
+DEFAULT-LOCATION.  Returns a list of a single string, full file name
+with path."
+  (let (file-name)
+    (setq default-location (file-name-as-directory default-location))
+    (while
+        (progn
+          (setq file-name (expand-file-name (read-file-name ask-mess default-location)))
+          (if (not (string= (file-name-directory file-name) (expand-file-name default-location)))
+              (setq ask-mess (format "New file must be in %s, please select again: " (expand-file-name default-location)))
+            (setq ask-mess "That name is already in use, please use another name: "))
+          (or (not (string= (file-name-directory file-name) (expand-file-name default-location))) (file-exists-p file-name))))
+    file-name))
+
+(prompt-for-new-file-name-at-location "New file name: " ".")
+
 ;;------------------------------------------------------------------------------
 ;; Commands
 ;;------------------------------------------------------------------------------
+
+(defun Fsproj-menu-new-file ()
+  "Create and add a new file to the project."
+  (interactive)
+  (let ((file-name (prompt-for-new-file-name-at-location "New file name: " (file-name-directory Fsproj-menu-projectfile))))
+    (find-file file-name)
+    ;; TODO: put some templated content into the new buffer
+    (save-buffer)    
+    (add-file-item Fsproj-menu-proj-doc file-name)
+    (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+    (refresh-buffer Fsproj-menu-project-file)))
+
+
+(defun Fsproj-menu-add-file ()
+  "Add the file at cursor to the project."
+  (interactive)
+  (let ((file-name (tabulated-list-get-id))
+        (entry-vector (tabulated-list-get-entry)))
+    (unless (entry-vector-included-file-p entry-vector)
+      (add-file-item Fsproj-menu-proj-doc file-name)
+      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+      (refresh-buffer Fsproj-menu-project-file))))
+
+
+(defun Fsproj-menu-remove-file ()
+  "Remove the file at cursor from the project."
+  (interactive)
+  (let ((file-name (tabulated-list-get-id))
+        (entry-vector (tabulated-list-get-entry)))    
+    (if (entry-vector-included-file-p entry-vector)
+        (progn
+          (remove-file-item Fsproj-menu-proj-doc file-name)
+          (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+          (refresh-buffer Fsproj-menu-project-file))        
+      (message "Cannot remove %s, can only remove files that are included in the project." file-name))))
+
+
+(defun Fsproj-menu-delete-file ()
+  "Delete the file at cursor from the disk and if it is included in the project then remove the file from the project too."
+  (interactive)
+  (let ((file-name (tabulated-list-get-id))
+        (entry-vector (tabulated-list-get-entry)))
+    (when (file-exists-p file-name)
+      (delete-file file-name))
+    (when (entry-vector-included-file-p entry-vector)
+      (remove-file-item Fsproj-menu-proj-doc file-name)
+      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+      (refresh-buffer Fsproj-menu-project-file))))
 
 
 (defun Fsproj-menu-get-file-for-visit ()
@@ -331,7 +444,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
 
 
 (defun Fsproj-menu-move-1 (to-position)
-  "Move the currentl line's file to TO-POSITION within the project."
+  "Move the file at cursor to TO-POSITION within the project."
   (interactive "nMove file to: ")
   (let* ((to-new-position (max (min to-position (tabulated-list-get-compile-file-count)) 1))
          (from-file-name (tabulated-list-get-id))
@@ -346,7 +459,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
 
 
 (defun Fsproj-menu-move ()
-  "Move the current line's file to another position within the project."
+  "Move the file at cursor to another position within the project."
   (interactive)
   (let ((from-file-name (tabulated-list-get-id))
         (entry-vector (tabulated-list-get-entry)))    
