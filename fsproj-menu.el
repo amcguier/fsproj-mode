@@ -87,6 +87,9 @@
 (defvar Fsproj-extension "fsproj"
   "The filename extension used by Visual Studio F# project files.")
 
+(defvar Fsproj-menu-compile-files "\\.fsi$|\\.fs$"
+  "A regexp matching file names that have the Compile build action by default.")
+
 (defvar Info-current-file) ; from info.el
 (defvar Info-current-node) ; from info.el
 
@@ -254,32 +257,33 @@ See `Fsproj-menu-templates' for the list of supported templates."
            (dom-node-insert-before item-group new-child ref-child)))))
  
 
-;; TODO: default-build-action, create-file-item,
-;; build-action-item-group, create-item-group
-
-
 (defun default-build-action (file-name)
   "Returns the default build action for the FILE-NAME."
-  ;; TODO: default-build-action
-  'Compile)
+  (if (string-match Fsproj-menu-compile-file file-name)
+      'Compile
+    'None))
 
 
 (defun create-file-item (owner build-action file-name)
-  ""
-  ;; TODO: create-file-item
-  (let ((file-item (dom-document-create-element (owner build-action))))
+  "Returns a new BUILD-ACTION file item node"
+  (let ((file-item (dom-document-create-element (owner build-action)))
+        (include-attribute (dom-document-create-attribute owner 'Include)))
+    (setf (dom-attr-value include-attribute) file-name
+          (dom-element-attributes file-item) (list include-attribute))
     file-item))
 
 
 (defun create-item-group (owner)
   "Returns a new ItemGroup node."
-  (let ((item-group (dom-document-create-element (owner 'ItemGroup))))
-    item-group))
+  (dom-document-create-element (owner 'ItemGroup)))
 
 
-(defun find-build-action-item-group ()
-  ""
-  )
+(defun find-build-action-item-group (doc build-action)
+  "Returns the ItemGroup for the given BUILD-ACTION, nil if none found."
+  (let ((item (car (dom-document-get-elements-by-tag-name build-action))))
+    (if item
+        (dom-node-parent-node item)
+      nil)))
 
 
 (defun add-file-item (doc file-name)
@@ -287,8 +291,8 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (let* ((root (dom-document-element doc))
          (build-action (default-build-action file-name))
          (item (create-file-item file-name build-action))
-         (item-group (build-action-item-group doc build-action)))
-    (if (item-group)
+         (item-group (find-build-action-item-group doc build-action)))
+    (if item-group
         (dom-node-insert-before item-group item)
       (let (item-group (create-item-group))
         (dom-node-insert-before item-group item)
@@ -300,7 +304,9 @@ See `Fsproj-menu-templates' for the list of supported templates."
   (let* ((root (dom-document-element doc))
          (old-child (car (dom-element-get-elements-by-attribute-value root "Include" file-name)))
          (item-group (dom-node-parent-node child)))
-    (dom-node-remove-child item-group old-child)))
+    (if (> (length (dom-node-child-nodes item-group)) 1)        
+        (dom-node-remove-child item-group old-child)
+      (dom-node-remove-child doc item-group))))
 
 
 (defun save-project-document (project-document project-file)
