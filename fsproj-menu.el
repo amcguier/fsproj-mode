@@ -268,7 +268,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
   "Returns a new BUILD-ACTION file item node"
   (let ((file-item (dom-document-create-element owner build-action))
         (include-attribute (dom-document-create-attribute owner 'Include)))
-    (setf (dom-attr-value include-attribute) file-name
+    (setf (dom-attr-value include-attribute) (file-name-nondirectory file-name)
           (dom-element-attributes file-item) (list include-attribute))
     file-item))
 
@@ -397,13 +397,13 @@ with path."
 (defun Fsproj-menu-new-file ()
   "Create and add a new file to the project."
   (interactive)
-  (let ((file-name (prompt-for-new-file-name-at-location "New file name: " (file-name-directory Fsproj-menu-projectfile))))
+  (let ((file-name (prompt-for-new-file-name-at-location "New file name: " (file-name-directory Fsproj-menu-project-file))))
+    (add-file-item Fsproj-menu-proj-doc (file-name-nondirectory file-name))
+    (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
+    (refresh-buffer Fsproj-menu-project-file)
     (find-file file-name)
     ;; TODO: put some templated content into the new buffer
-    (save-buffer)    
-    (add-file-item Fsproj-menu-proj-doc file-name)
-    (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
-    (refresh-buffer Fsproj-menu-project-file)))
+    (save-buffer)))
 
 
 (defun Fsproj-menu-add-file ()
@@ -439,8 +439,8 @@ with path."
       (delete-file file-name))
     (when (entry-vector-included-file-p entry-vector)
       (remove-file-item Fsproj-menu-proj-doc file-name)
-      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
-      (refresh-buffer Fsproj-menu-project-file))))
+      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file))
+    (refresh-buffer Fsproj-menu-project-file)))
 
 
 (defun Fsproj-menu-get-file-for-visit ()
