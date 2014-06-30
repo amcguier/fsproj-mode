@@ -48,7 +48,7 @@
     <None Include="Foo.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  <None Include="Foo.txt"></None></ItemGroup>
+  </ItemGroup>
   <ItemGroup>
     <Content Include="Copy.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
