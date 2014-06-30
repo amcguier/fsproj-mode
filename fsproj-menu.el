@@ -303,7 +303,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
   "Remove the file from the DOC."
   (let* ((root (dom-document-element doc))
          (old-child (car (dom-element-get-elements-by-attribute-value root "Include" file-name)))
-         (item-group (dom-node-parent-node child)))
+         (item-group (dom-node-parent-node old-child)))
     (if (> (length (dom-node-child-nodes item-group)) 1)        
         (dom-node-remove-child item-group old-child)
       (dom-node-remove-child doc item-group))))
