@@ -257,6 +257,31 @@ See `Fsproj-menu-templates' for the list of supported templates."
 ;; TODO: default-build-action, create-file-item,
 ;; build-action-item-group, create-item-group
 
+
+(defun default-build-action (file-name)
+  "Returns the default build action for the FILE-NAME."
+  ;; TODO: default-build-action
+  'Compile)
+
+
+(defun create-file-item (owner build-action file-name)
+  ""
+  ;; TODO: create-file-item
+  (let ((file-item (dom-document-create-element (owner build-action))))
+    file-item))
+
+
+(defun create-item-group (owner)
+  "Returns a new ItemGroup node."
+  (let ((item-group (dom-document-create-element (owner 'ItemGroup))))
+    item-group))
+
+
+(defun find-build-action-item-group ()
+  ""
+  )
+
+
 (defun add-file-item (doc file-name)
   "Add the file to the DOC."
   (let* ((root (dom-document-element doc))
