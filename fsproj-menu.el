@@ -87,7 +87,7 @@
 (defvar Fsproj-extension "fsproj"
   "The filename extension used by Visual Studio F# project files.")
 
-(defvar Fsproj-menu-compile-files "\\.fsi$|\\.fs$"
+(defvar Fsproj-menu-compile-file "\\.fsi$|\\.fs$"
   "A regexp matching file names that have the Compile build action by default.")
 
 (defvar Info-current-file) ; from info.el
@@ -266,7 +266,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
 
 (defun create-file-item (owner build-action file-name)
   "Returns a new BUILD-ACTION file item node"
-  (let ((file-item (dom-document-create-element (owner build-action)))
+  (let ((file-item (dom-document-create-element owner build-action))
         (include-attribute (dom-document-create-attribute owner 'Include)))
     (setf (dom-attr-value include-attribute) file-name
           (dom-element-attributes file-item) (list include-attribute))
@@ -280,7 +280,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
 
 (defun find-build-action-item-group (doc build-action)
   "Returns the ItemGroup for the given BUILD-ACTION, nil if none found."
-  (let ((item (car (dom-document-get-elements-by-tag-name build-action))))
+  (let ((item (car (dom-document-get-elements-by-tag-name doc build-action))))
     (if item
         (dom-node-parent-node item)
       nil)))
@@ -290,7 +290,7 @@ See `Fsproj-menu-templates' for the list of supported templates."
   "Add the file to the DOC."
   (let* ((root (dom-document-element doc))
          (build-action (default-build-action file-name))
-         (item (create-file-item file-name build-action))
+         (item (create-file-item doc build-action file-name))
          (item-group (find-build-action-item-group doc build-action)))
     (if item-group
         (dom-node-insert-before item-group item)
@@ -389,7 +389,6 @@ with path."
           (or (not (string= (file-name-directory file-name) (expand-file-name default-location))) (file-exists-p file-name))))
     file-name))
 
-(prompt-for-new-file-name-at-location "New file name: " ".")
 
 ;;------------------------------------------------------------------------------
 ;; Commands
@@ -1036,9 +1035,8 @@ The special value \"*\" matches all attribute values."
 ;; Test: non-project-file-entries
 (eval-when-compile
   (when (file-readable-p "TestProject/TestProject.fsproj")
-    (let ((doc (dom-make-document-from-xml (car (xml-parse-file "TestProject/TestProject.fsproj")))))
-      ;(move-file-item doc 1 "Foo.fsi" 4 "Program.fs")
-      )))
+    
+    ))
 
 
 ;;; fsproj-menu.el ends here
