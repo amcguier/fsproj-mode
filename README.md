@@ -28,11 +28,15 @@ Status | Description
 
 Key | Action
 --- | ------
-RET | Open the current file in this window.
-e | Open the current file in this window.
-f | Open the current file in this window.
+RET | Open the file at cursor in this window.
+d | Delete the file at cursor
+e | Open the file at cursor in this window.
+f | Open the file at cursor in this window.
 g | Refresh the project buffer.
-m | Move the position of the current file within the project.
-o | Open the current file in another window.
+m | Move the position of the file at cursor within the project.
+n | Add a new file to the project.
+o | Open the file at cursor in another window.
 q | Quit the project buffer.
++ | Add the file at cursor to the project.
+- | Remove the file at cursor from the project.
 ? | Open Help in another window.
