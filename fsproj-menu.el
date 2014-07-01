@@ -323,12 +323,19 @@ See `Fsproj-menu-templates' for the list of supported templates."
 	 (set-visited-file-name new-file-name nil t))))
 
 
+(defun include-attr-p (node)
+  "Returns t if the NODE is an Include node"
+  (eq 'Include (dom-node-name node)))
+
+
 (defun fsproj-rename-file-item (doc old-file-name new-file-name)
   "Rename the OLD-FILE-NAME to NEW-FILE-NAME in the project DOC."
   (let* ((root (dom-document-element doc))
          (child (car (dom-element-get-elements-by-attribute-value root "Include" old-file-name))))
     (when child
-      (--map-when (include-attr-p it) (setf (dom-attr-value it) new-file-name) (dom-element-attributes child)))))
+      (--map-when (include-attr-p it)
+                  (setf (dom-attr-value it) new-file-name)
+                  (dom-element-attributes child)))))
 
 
 (defun save-project-document (project-document project-file)
