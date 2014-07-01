@@ -119,6 +119,7 @@
     (define-key map "m" 'Fsproj-menu-move)
     (define-key map "n" 'Fsproj-menu-new-file)
     (define-key map "o" 'Fsproj-menu-find-file-other-window)
+    (define-key map "r" 'Fsproj-menu-rename-file)
     (define-key map "+" 'Fsproj-menu-add-file)
     (define-key map "-" 'Fsproj-menu-remove-file)
     (bindings--define-key menu-map [menu-bar immediate find-file-other-window]
@@ -142,6 +143,9 @@
     (bindings--define-key menu-map [move]
       '(menu-item "Move" Fsproj-menu-move
                   :help "Move file at cursor to another position within the project"))
+    (bindings--define-key menu-map [rename]
+      '(menu-item "Rename" Fsproj-menu-rename-file
+                  :help "Rename file at cursor"))
     (bindings--define-key menu-map [refresh]
       '(menu-item "Refresh" Fsproj-menu-refresh-buffer
                   :help "Refresh the project buffer"))
@@ -169,6 +173,7 @@ Type e\tOpen file at cursor in this window.
 Type f\tOpen file at cursor in this window.
 Type \\[Fsproj-menu-refresh-buffer]\tRefresh the project buffer.
 Type \\[Fsproj-menu-move]\tMove file at cursor to another position within the project.
+Type \\[Fsproj-menu-rename-file]\tRename file at cursor.
 Type \\[Fsproj-menu-find-file-other-window]\tOpen file at cursor in another window.
 Type \\[quit-window]\tQuit the project buffer.
 "
@@ -210,7 +215,7 @@ Menu."
   (when (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg))
-    (message "Commands: RET, a, e, f, m, n, o, +, -, q to quit; ? for help.")))
+    (message "Commands: RET, a, e, f, m, n, o, r, +, -, q to quit; ? for help.")))
 
 
 (defun fsproj-menu-other-window (&optional arg)
@@ -226,7 +231,7 @@ ARG, show only files that are in the project file."
   (unless (fsharp-ac--valid-project-p (fsharp-mode/find-fsproj (fsproj-start)))
     (switch-to-buffer-other-window
      (list-files-noselect (fsharp-mode/find-fsproj (fsproj-start)) arg)))
-  (message "Commands: RET, a, e, f, m, n, o, +, -, q to quit; ? for help."))
+  (message "Commands: RET, a, e, f, m, n, o, r, +, -, q to quit; ? for help."))
 
 
 (defun create-fsproj-file (file-name template)
@@ -309,6 +314,23 @@ See `Fsproj-menu-templates' for the list of supported templates."
       (dom-node-remove-child doc item-group))))
 
 
+(defun fsproj-rename-file (old-file-name new-file-name ok-if-already-exists)
+  "Rename the OLD-FILE-NAME on disk to the NEW-FILE-NAME."
+  (rename-file old-file-name new-file-name ok-if-already-exists)
+  ;; Silently rename the visited file of any buffer visiting this file.
+  (and (get-file-buffer old-file-name)
+       (with-current-buffer (get-file-buffer old-file-name)
+	 (set-visited-file-name new-file-name nil t))))
+
+
+(defun fsproj-rename-file-item (doc old-file-name new-file-name)
+  "Rename the OLD-FILE-NAME to NEW-FILE-NAME in the project DOC."
+  (let* ((root (dom-document-element doc))
+         (child (car (dom-element-get-elements-by-attribute-value root "Include" old-file-name))))
+    (when child
+      (--map-when (include-attr-p it) (setf (dom-attr-value it) new-file-name) (dom-element-attributes child)))))
+
+
 (defun save-project-document (project-document project-file)
   "Save the project document to the project file."
   (when (and project-file (file-writable-p project-file))
@@ -386,9 +408,10 @@ with path."
           (if (not (string= (file-name-directory file-name) (expand-file-name default-location)))
               (setq ask-mess (format "New file must be in %s, please select again: " (expand-file-name default-location)))
             (setq ask-mess "That name is already in use, please use another name: "))
-          (or (not (string= (file-name-directory file-name) (expand-file-name default-location))) (file-exists-p file-name))))
+          (or
+           (not (string= (file-name-directory file-name) (expand-file-name default-location)))
+           (file-exists-p file-name))))
     file-name))
-
 
 ;;------------------------------------------------------------------------------
 ;; Commands
@@ -397,7 +420,9 @@ with path."
 (defun Fsproj-menu-new-file ()
   "Create and add a new file to the project."
   (interactive)
-  (let ((file-name (prompt-for-new-file-name-at-location "New file name: " (file-name-directory Fsproj-menu-project-file))))
+  (let ((file-name (prompt-for-new-file-name-at-location
+                    "New file name: "
+                    (file-name-directory Fsproj-menu-project-file))))
     (add-file-item Fsproj-menu-proj-doc (file-name-nondirectory file-name))
     (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
     (refresh-buffer Fsproj-menu-project-file)
@@ -415,6 +440,18 @@ with path."
       (add-file-item Fsproj-menu-proj-doc file-name)
       (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file)
       (refresh-buffer Fsproj-menu-project-file))))
+
+
+(defun Fsproj-menu-rename-file ()
+  "Rename the file at cursor."
+  (interactive)
+  (let* ((old-file-name (tabulated-list-get-id))
+         (entry-vector (tabulated-list-get-entry))
+         (new-file-name (prompt-for-new-file-name-at-location
+                         (format "Rename %s to: " old-file-name)
+                         (file-name-directory Fsproj-menu-project-file))))
+    (fsproj-rename-file old-file-name new-file-name t)
+    (fsproj-rename-file-item Fsproj-menu-proj-doc old-file-name new-file-name)))
 
 
 (defun Fsproj-menu-remove-file ()
@@ -458,8 +495,7 @@ with path."
           (error "File is a symlink to a nonexistent target")
         ;(error "File no longer exists; type `g' to update Fsproj-menu
 ;buffer")
-        file-name
-        ))))
+        file-name))))
 
 
 (defun Fsproj-menu-find-file ()
