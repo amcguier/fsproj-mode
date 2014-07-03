@@ -348,12 +348,60 @@ See `Fsproj-menu-templates' for the list of supported templates."
       (write-region (point-min) (point-max) project-file))))
 
 
+(defun fsproj-find-file-line-position (file-name)
+  "Returns the buffer line position of the file-name."
+  (let ((line-position (--find-index (string= (file-name-nondirectory file-name) (entry-id it)) tabulated-list-entries)))
+    (when line-position
+      (+ 1 line-position))))
+
+
+(defun fsproj-goto-file (file-name)
+  "Go to line describing file FILE-NAME in this project buffer."
+  (goto-line (fsproj-find-file-line-position file-name)))
+
+
+(defun fsproj-save-positions ()
+  "Return current positions in the buffer and all windows with this project.
+The positions have the form (BUFFER-POSITION WINDOW-POSITIONS).
+
+BUFFER-POSITION is the point position in the current project buffer.
+It has the form (BUFFER PROJECT-FILENAME BUFFER-POINT).
+
+WINDOW-POSITIONS are current positions in all windows displaying
+this project buffer.  The window positions have the form (WINDOW
+PROJECT-FILENAME WINDOW-POINT)."
+  (list
+   (list (current-buffer) Fsproj-menu-project-file (point))
+   (mapcar (lambda (w)
+             (list w
+                   (with-selected-window w
+                     Fsproj-menu-project-file)
+                   (window-point w)))
+           (get-buffer-window-list nil 0 t))))
+
+
+(defun fsproj-restore-positions (positions)
+  "Restore POSITIONS saved with `fsproj-save-positions'."
+  (let* ((buf-file-pos (nth 0 positions))
+         (buffer (nth 0 buf-file-pos)))
+    (unless (and (nth 1 buf-file-pos)
+                 (fsproj-goto-file (nth 1 buf-file-pos)))
+      (goto-char (nth 2 buf-file-pos)))
+    (dolist (win-file-pos (nth 1 positions))
+      ;; Ensure that window still displays the original buffer.
+      (when (eq (window-buffer (nth 0 win-file-pos)) buffer)
+        (with-selected-window (nth 0 win-file-pos)
+          (unless (and (nth 1 win-file-pos)
+                       (fsproj-goto-file (nth 1 win-file-pos)))
+            (goto-char (nth 2 win-file-pos))))))))
+
+
 (defun refresh-buffer (project-file)
   "Refresh the Fsproj-file-list buffer."
   (setq Fsproj-menu-proj-doc
         (dom-make-document-from-xml (car (xml-parse-file project-file))))
   (list-files--refresh project-file)
-  (tabulated-list-print))
+  (tabulated-list-print t))
 
 
 (defun entry-vector-file-status (entry-vector)
@@ -460,10 +508,11 @@ with path."
                          (format "Rename %s to: " old-file-name)
                          (file-name-directory Fsproj-menu-project-file))))
     (fsproj-rename-file old-file-name new-file-name t)
-    (unless (entry-vector-included-file-p entry-vector)
-      (fsproj-rename-file-item Fsproj-menu-proj-doc old-file-name new-file-name)
+    (when (entry-vector-included-file-p entry-vector)
+      (fsproj-rename-file-item Fsproj-menu-proj-doc old-file-name (file-name-nondirectory new-file-name))
       (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file))
-    (refresh-buffer Fsproj-menu-project-file)))
+    (refresh-buffer Fsproj-menu-project-file)
+    (fsproj-goto-file new-file-name)))
 
 
 (defun Fsproj-menu-remove-file ()
