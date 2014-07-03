@@ -331,11 +331,13 @@ See `Fsproj-menu-templates' for the list of supported templates."
 (defun fsproj-rename-file-item (doc old-file-name new-file-name)
   "Rename the OLD-FILE-NAME to NEW-FILE-NAME in the project DOC."
   (let* ((root (dom-document-element doc))
-         (child (car (dom-element-get-elements-by-attribute-value root "Include" old-file-name))))
-    (when child
-      (--map-when (include-attr-p it)
-                  (setf (dom-attr-value it) new-file-name)
-                  (dom-element-attributes child)))))
+         (old-child (car (dom-element-get-elements-by-attribute-value root "Include" old-file-name)))
+         (new-child (dom-node-clone-node old-child t))
+         (item-group (dom-node-parent-node old-child))
+         (include-attr (dom-document-create-attribute doc 'Include)))
+    (setf (dom-attr-value include-attr) new-file-name
+          (dom-element-attributes new-child) (list include-attr))
+    (dom-node-replace-child item-group new-child old-child)))
 
 
 (defun save-project-document (project-document project-file)
@@ -458,7 +460,10 @@ with path."
                          (format "Rename %s to: " old-file-name)
                          (file-name-directory Fsproj-menu-project-file))))
     (fsproj-rename-file old-file-name new-file-name t)
-    (fsproj-rename-file-item Fsproj-menu-proj-doc old-file-name new-file-name)))
+    (unless (entry-vector-included-file-p entry-vector)
+      (fsproj-rename-file-item Fsproj-menu-proj-doc old-file-name new-file-name)
+      (save-project-document Fsproj-menu-proj-doc Fsproj-menu-project-file))
+    (refresh-buffer Fsproj-menu-project-file)))
 
 
 (defun Fsproj-menu-remove-file ()
