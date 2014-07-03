@@ -39,7 +39,7 @@
     
     
     
-    <Compile Include="Foo.fsi"></Compile><Compile Include="Foo.fs"></Compile><Compile Include="Program.fs"></Compile><Compile Include="AssemblyInfo.fs"></Compile>
+    <Compile Include="Foo.fs"></Compile><Compile Include="Program.fs"></Compile><Compile Include="Bar.fsi"></Compile><Compile Include="AssemblyInfo.fs"></Compile>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets"></Import>
   <ItemGroup>

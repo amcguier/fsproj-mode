@@ -36,6 +36,7 @@ g | Refresh the project buffer.
 m | Move the position of the file at cursor within the project.
 n | Add a new file to the project.
 o | Open the file at cursor in another window.
+r | Rename the file at cursor.
 q | Quit the project buffer.
 + | Add the file at cursor to the project.
 - | Remove the file at cursor from the project.
