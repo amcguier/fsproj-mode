@@ -87,7 +87,7 @@
 (defvar Fsproj-extension "fsproj"
   "The filename extension used by Visual Studio F# project files.")
 
-(defvar Fsproj-menu-compile-file "\\.fsi$|\\.fs$"
+(defvar Fsproj-menu-compile-file "\\.fsi$\\|\\.fs$"
   "A regexp matching file names that have the Compile build action by default.")
 
 (defvar Info-current-file) ; from info.el
